@@ -1,225 +1,316 @@
-import { useState } from 'react'
-import { Settings, Upload } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Settings, Trash2, CheckCircle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 const SENHA_ADMIN = 'usi2024'
 
-export default function Admin() {
+const SETORES = [
+  'Usinagem', 'Rosqueadeira', 'Robô de Solda', 'Calandra',
+  'Dobradeira', 'Laser', 'Pintura', 'Expedição', 'PCP', 'Qualidade', 'Outro'
+]
+
+export default function Admin({ usuario }) {
   const [autenticado, setAutenticado] = useState(false)
   const [senha, setSenha] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [progresso, setProgresso] = useState(null)
   const [toast, setToast] = useState(null)
+  const [stats, setStats] = useState(null)
+  const [reportes, setReportes] = useState([])
+  const [responsaveis, setResponsaveis] = useState([])
+  const [abaAtiva, setAbaAtiva] = useState('status')
+  const [novoResp, setNovoResp] = useState({ nome: '', email: '', setor: '' })
+  const [adicionando, setAdicionando] = useState(false)
+
+  useEffect(() => {
+    if (usuario?.nivel === 'super') {
+      setAutenticado(true)
+      carregarDados()
+    }
+  }, [usuario])
 
   function showToast(msg, cor = 'var(--green)') {
     setToast({ msg, cor })
     setTimeout(() => setToast(null), 3000)
   }
 
-  function logar() {
+  async function logar() {
     if (senha === SENHA_ADMIN) {
       setAutenticado(true)
+      await carregarDados()
     } else {
       showToast('Senha incorreta!', 'var(--red)')
     }
   }
 
-  async function processarCSV(file) {
-    setLoading(true)
-    setProgresso('Lendo arquivo...')
+  async function carregarDados() {
+    const { count: totalOrdens } = await supabase
+      .from('ordens').select('*', { count: 'exact', head: true })
+    const { count: totalLancamentos } = await supabase
+      .from('lancamentos').select('*', { count: 'exact', head: true })
+    const { count: totalReportes } = await supabase
+      .from('apontamentos').select('*', { count: 'exact', head: true })
+    setStats({ totalOrdens, totalLancamentos, totalReportes })
 
-    const text = await file.text()
-    const lines = text.trim().split('\n')
-    const hdrs = lines[0].replace(/\r/g, '').split(';')
+    const { data: reps } = await supabase
+      .from('apontamentos')
+      .select('*')
+      .order('criado_em', { ascending: false })
+    setReportes(reps || [])
 
-    // Valida se é o arquivo certo
-    if (!hdrs.some(h => h.includes('Item CCS') || h.includes('Ordem'))) {
-      setLoading(false)
-      setProgresso(null)
-      showToast('❌ Arquivo inválido! Carregue o CPCC de ordens.', 'var(--red)')
-      return
-    }
+    const { data: resps } = await supabase
+      .from('responsaveis')
+      .select('*')
+      .order('setor')
+    setResponsaveis(resps || [])
+  }
 
-    const rows = []
-    for (let i = 1; i < lines.length; i++) {
-      const c = lines[i].replace(/\r/g, '').split(';')
-      if (c.length < 10) continue
-      const r = {}
-      hdrs.forEach((h, j) => r[h] = (c[j] || '').trim())
-      if (!r['Item CCS']) continue
-      rows.push({
-        ordem: r['Ordem'] || '',
-        item_ccs: r['Item CCS'] || '',
-        item_cliente: r['Item Cliente'] || '',
-        estado: r['Estado'] || '',
-        qtde_ordem: parseFloat(r['Qtde Ordem']) || 0,
-        qtde_prod: parseFloat(r['Qtde Prod']) || 0,
-        saldo: parseFloat(r['Saldo']) || 0,
-        tarefa: r['Tarefa'] || '',
-        operacoes: r['Operações'] || r['Opera\u00e7\u00f5es'] || '',
-        prox_oper: r['Prox.Oper.'] || '',
-        posto: r['Posto'] || '',
-        cliente: r['Cliente'] || '',
-        inicio: r['Inicio'] || '',
-        termino: r['Término'] || r['T\u00e9rmino'] || ''
-      })
-    }
+  async function resolverReporte(id) {
+    await supabase.from('apontamentos').delete().eq('id', id)
+    setReportes(prev => prev.filter(r => r.id !== id))
+    setStats(prev => ({ ...prev, totalReportes: prev.totalReportes - 1 }))
+    showToast('✅ Reporte resolvido!')
+  }
 
-    // Valida se encontrou ordens
-    if (rows.length === 0) {
-      setLoading(false)
-      setProgresso(null)
-      showToast('❌ Nenhuma ordem encontrada! Verifique o arquivo.', 'var(--red)')
-      return
-    }
-
-    setProgresso(`${rows.length} ordens lidas — limpando banco...`)
-
-    // Limpa tabela
-    await supabase
-      .from('ordens')
-      .delete()
+  async function limparTodos() {
+    if (!confirm('Limpar todos os reportes?')) return
+    await supabase.from('apontamentos').delete()
       .neq('id', '00000000-0000-0000-0000-000000000000')
+    setReportes([])
+    setStats(prev => ({ ...prev, totalReportes: 0 }))
+    showToast('✅ Todos os reportes limpos!')
+  }
 
-    setProgresso('Enviando ordens...')
-
-    // Envia em lotes de 500
-    const LOTE = 500
-    let enviados = 0
-    for (let i = 0; i < rows.length; i += LOTE) {
-      const lote = rows.slice(i, i + LOTE)
-      const { error } = await supabase.from('ordens').insert(lote)
-      if (error) {
-        setLoading(false)
-        setProgresso(null)
-        showToast('❌ Erro ao salvar no banco! Tente novamente.', 'var(--red)')
-        return
-      }
-      enviados += lote.length
-      setProgresso(`Enviando... ${enviados}/${rows.length}`)
+  async function adicionarResponsavel() {
+    if (!novoResp.nome || !novoResp.email || !novoResp.setor) {
+      showToast('Preencha todos os campos!', 'var(--red)')
+      return
     }
+    setAdicionando(true)
+    const { data, error } = await supabase
+      .from('responsaveis')
+      .insert(novoResp)
+      .select()
+      .single()
 
-    setLoading(false)
-    setProgresso(null)
-    showToast(`✅ ${rows.length} ordens atualizadas!`)
+    if (error) {
+      showToast('Erro ao adicionar!', 'var(--red)')
+    } else {
+      setResponsaveis(prev => [...prev, data])
+      setNovoResp({ nome: '', email: '', setor: '' })
+      showToast('✅ Responsável adicionado!')
+    }
+    setAdicionando(false)
   }
 
-  function onFileChange(e) {
-    const file = e.target.files[0]
-    if (!file) return
-    processarCSV(file)
-    e.target.value = ''
+  async function removerResponsavel(id) {
+    await supabase.from('responsaveis').delete().eq('id', id)
+    setResponsaveis(prev => prev.filter(r => r.id !== id))
+    showToast('✅ Removido!')
   }
 
-  // Tela de login
   if (!autenticado) {
     return (
       <div>
         <div className="page-header">
-          <div className="page-icon">
-            <Settings size={22} color="#000" />
-          </div>
-          <div>
-            <h1>ADMIN</h1>
-            <p>Área restrita</p>
-          </div>
+          <div className="page-icon"><Settings size={22} color="#000" /></div>
+          <div><h1>ADMIN</h1><p>Área restrita</p></div>
         </div>
-
         <div className="card">
           <div className="card-title">Acesso admin</div>
           <div className="field">
             <label>Senha</label>
-            <input
-              className="input"
-              type="password"
-              value={senha}
+            <input className="input" type="password" value={senha}
               onChange={e => setSenha(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && logar()}
-              placeholder="Digite a senha..."
-            />
+              placeholder="Digite a senha..." />
           </div>
-          <button className="btn-primary" onClick={logar}>
-            Entrar
-          </button>
+          <button className="btn-primary" onClick={logar}>Entrar</button>
         </div>
-
-        {toast && (
-          <div className="toast" style={{ background: toast.cor }}>
-            {toast.msg}
-          </div>
-        )}
+        {toast && <div className="toast" style={{ background: toast.cor }}>{toast.msg}</div>}
       </div>
     )
   }
 
-  // Tela admin
   return (
     <div>
       <div className="page-header">
-        <div className="page-icon">
-          <Settings size={22} color="#000" />
-        </div>
+        <div className="page-icon"><Settings size={22} color="#000" /></div>
         <div>
           <h1>ADMIN</h1>
-          <p>Atualizar dados do sistema</p>
+          <p>{usuario?.nivel === 'super' ? '👑 Super Admin' : 'Painel de controle'}</p>
         </div>
-        <button
-          onClick={() => setAutenticado(false)}
-          style={{
+        {usuario?.nivel !== 'super' && (
+          <button onClick={() => setAutenticado(false)} style={{
             marginLeft: 'auto', background: 'none',
             border: '1px solid var(--border)', borderRadius: 8,
-            padding: '6px 12px', color: 'var(--muted)',
-            cursor: 'pointer', fontSize: 12
-          }}
-        >
-          Sair
-        </button>
-      </div>
-
-      <div className="card">
-        <div className="card-title">📦 Atualizar Ordens</div>
-        <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>
-          Carregue o arquivo CPCC exportado do sistema. O banco será atualizado automaticamente.
-        </p>
-
-        {loading ? (
-          <div style={{
-            background: 'rgba(0,229,255,.06)', border: '1px solid rgba(0,229,255,.2)',
-            borderRadius: 10, padding: 20, textAlign: 'center'
-          }}>
-            <div style={{ fontSize: 28, marginBottom: 8 }}>⏳</div>
-            <div style={{ fontFamily: 'monospace', fontSize: 13, color: 'var(--accent)' }}>
-              {progresso}
-            </div>
-          </div>
-        ) : (
-          <label style={{
-            display: 'block', border: '1.5px dashed var(--border)',
-            borderRadius: 12, padding: 24, textAlign: 'center',
-            cursor: 'pointer'
-          }}>
-            <input type="file" accept=".csv" onChange={onFileChange} style={{ display: 'none' }} />
-            <Upload size={28} color="var(--accent)" style={{ marginBottom: 8 }} />
-            <div style={{ fontWeight: 700, marginBottom: 4 }}>Carregar CSV de Ordens</div>
-            <div style={{ fontSize: 12, color: 'var(--muted)' }}>Arquivo CPCC — separado por ponto e vírgula</div>
-          </label>
+            padding: '6px 12px', color: 'var(--muted)', cursor: 'pointer', fontSize: 12
+          }}>Sair</button>
         )}
       </div>
 
-      <div className="card">
-        <div className="card-title">ℹ️ Informações</div>
-        <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.8 }}>
-          <div>📦 <strong style={{ color: 'var(--text)' }}>Ordens</strong> — atualizar diariamente com o CPCC</div>
-          <div>📋 <strong style={{ color: 'var(--text)' }}>Lançamentos</strong> — salvos automaticamente pelos operadores</div>
-          <div>🔄 <strong style={{ color: 'var(--text)' }}>Tempo real</strong> — qualquer atualização aparece pra todos na hora</div>
-        </div>
-      </div>
-
-      {toast && (
-        <div className="toast" style={{ background: toast.cor }}>
-          {toast.msg}
+      {stats && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
+          {[
+            ['📦 Ordens', stats.totalOrdens, 'var(--accent)'],
+            ['📋 Lançamentos', stats.totalLancamentos, 'var(--green)'],
+            ['⚠️ Reportes', stats.totalReportes, stats.totalReportes > 0 ? 'var(--yellow)' : 'var(--green)'],
+          ].map(([l, v, c]) => (
+            <div key={l} className="card" style={{ padding: 12, textAlign: 'center', marginBottom: 0, cursor: 'pointer' }}
+              onClick={() => l.includes('Reporte') && setAbaAtiva('reportes')}>
+              <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>{l}</div>
+              <div style={{ fontFamily: 'monospace', fontSize: 20, fontWeight: 700, color: c }}>{v}</div>
+            </div>
+          ))}
         </div>
       )}
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        {[
+          { key: 'status', label: '🟢 Status' },
+          { key: 'reportes', label: `⚠️ Reportes${stats?.totalReportes > 0 ? ` (${stats.totalReportes})` : ''}` },
+          { key: 'responsaveis', label: '👤 Responsáveis' },
+        ].map(({ key, label }) => (
+          <button key={key} onClick={() => setAbaAtiva(key)} style={{
+            flex: 1, padding: '10px 8px', border: '1px solid',
+            borderColor: abaAtiva === key ? 'var(--accent)' : 'var(--border)',
+            background: abaAtiva === key ? 'rgba(0,229,255,.1)' : 'var(--surface)',
+            color: abaAtiva === key ? 'var(--accent)' : 'var(--muted)',
+            borderRadius: 10, fontWeight: 700, fontSize: 12, cursor: 'pointer'
+          }}>{label}</button>
+        ))}
+      </div>
+
+      {abaAtiva === 'status' && (
+        <div className="card">
+          <div className="card-title">ℹ️ Status do sistema</div>
+          <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.8 }}>
+            <div>🟢 <strong style={{ color: 'var(--text)' }}>Banco de dados</strong> — Supabase online</div>
+            <div>🔄 <strong style={{ color: 'var(--text)' }}>Ordens</strong> — atualizadas automaticamente</div>
+            <div>📋 <strong style={{ color: 'var(--text)' }}>Lançamentos</strong> — salvos em tempo real</div>
+            <div>⚠️ <strong style={{ color: 'var(--text)' }}>Reportes</strong> — enviados ao responsável</div>
+          </div>
+        </div>
+      )}
+
+      {abaAtiva === 'reportes' && (
+        <div>
+          {reportes.length > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+              <button onClick={limparTodos} style={{
+                background: 'rgba(255,61,90,.1)', border: '1px solid rgba(255,61,90,.3)',
+                borderRadius: 8, padding: '7px 14px', color: 'var(--red)',
+                cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                display: 'flex', alignItems: 'center', gap: 6
+              }}>
+                <Trash2 size={13} /> Limpar todos
+              </button>
+            </div>
+          )}
+          {reportes.length === 0 ? (
+            <div className="empty">
+              <div className="emoji">✅</div>
+              <h3>Nenhum reporte pendente</h3>
+              <p>Tudo em ordem!</p>
+            </div>
+          ) : (
+            reportes.map(r => (
+              <div key={r.id} className="card" style={{ marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700, marginBottom: 4 }}>
+                      OP {r.ordem} · {r.item}
+                    </div>
+                    {r.responsavel && (
+                      <div style={{ fontSize: 11, color: 'var(--accent)', marginBottom: 4 }}>
+                        👤 {r.responsavel}
+                      </div>
+                    )}
+                    <div style={{
+                      background: 'rgba(255,214,10,.08)', border: '1px solid rgba(255,214,10,.2)',
+                      borderRadius: 6, padding: '6px 10px', fontSize: 13,
+                      color: 'var(--text)', marginBottom: 6
+                    }}>{r.motivo}</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                      {new Date(r.criado_em).toLocaleString('pt-BR')}
+                    </div>
+                  </div>
+                  <button onClick={() => resolverReporte(r.id)} style={{
+                    background: 'rgba(0,255,136,.1)', border: '1px solid rgba(0,255,136,.3)',
+                    borderRadius: 8, padding: '8px 10px', cursor: 'pointer',
+                    color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 4,
+                    fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap'
+                  }}>
+                    <CheckCircle size={13} /> Resolver
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {abaAtiva === 'responsaveis' && (
+        <div>
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-title">➕ Adicionar responsável</div>
+            <div className="field">
+              <label>Nome</label>
+              <input className="input" value={novoResp.nome}
+                onChange={e => setNovoResp(p => ({ ...p, nome: e.target.value }))}
+                placeholder="Ex: João Silva" />
+            </div>
+            <div className="field">
+              <label>Email</label>
+              <input className="input" type="email" value={novoResp.email}
+                onChange={e => setNovoResp(p => ({ ...p, email: e.target.value }))}
+                placeholder="Ex: joao@empresa.com" />
+            </div>
+            <div className="field">
+              <label>Setor</label>
+              <select className="input" value={novoResp.setor}
+                onChange={e => setNovoResp(p => ({ ...p, setor: e.target.value }))}>
+                <option value="">Selecione o setor</option>
+                {SETORES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <button className="btn-primary" onClick={adicionarResponsavel} disabled={adicionando}>
+              {adicionando ? 'Adicionando...' : '➕ Adicionar'}
+            </button>
+          </div>
+
+          {responsaveis.length === 0 ? (
+            <div className="empty">
+              <div className="emoji">👤</div>
+              <h3>Nenhum responsável cadastrado</h3>
+              <p>Adicione os responsáveis por setor acima</p>
+            </div>
+          ) : (
+            responsaveis.map(r => (
+              <div key={r.id} className="card" style={{ marginBottom: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>{r.nome}</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{r.email}</div>
+                    <div style={{ marginTop: 4 }}>
+                      <span style={{
+                        background: 'rgba(0,229,255,.15)', color: 'var(--accent)',
+                        fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4
+                      }}>{r.setor}</span>
+                    </div>
+                  </div>
+                  <button onClick={() => removerResponsavel(r.id)} style={{
+                    background: 'rgba(255,61,90,.1)', border: '1px solid rgba(255,61,90,.3)',
+                    borderRadius: 8, padding: '8px 10px', cursor: 'pointer', color: 'var(--red)'
+                  }}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {toast && <div className="toast" style={{ background: toast.cor }}>{toast.msg}</div>}
     </div>
   )
 }
