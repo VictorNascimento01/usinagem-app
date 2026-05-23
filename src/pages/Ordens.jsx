@@ -74,6 +74,16 @@ function textoParado(dias) {
   return `Parada há ${dias} dias`
 }
 
+function parseData(dataStr) {
+  if (!dataStr) return new Date(0)
+  try {
+    const partes = dataStr.split('/')
+    if (partes.length !== 3) return new Date(0)
+    const ano = partes[2].length === 2 ? '20' + partes[2] : partes[2]
+    return new Date(`${ano}-${partes[1]}-${partes[0]}`)
+  } catch { return new Date(0) }
+}
+
 export default function Ordens() {
   const [query, setQuery] = useState('')
   const [tipoBusca, setTipoBusca] = useState('item')
@@ -88,6 +98,8 @@ export default function Ordens() {
   const [toast, setToast] = useState(null)
   const [responsaveis, setResponsaveis] = useState([])
   const [selectedResp, setSelectedResp] = useState(null)
+  const [buscaResp, setBuscaResp] = useState('')
+  const [respFiltrados, setRespFiltrados] = useState([])
 
   function showToast(msg, cor = 'var(--green)') {
     setToast({ msg, cor })
@@ -141,7 +153,7 @@ export default function Ordens() {
       .from('apontamentos_prod')
       .select('*')
       .eq('ordem', r.ordem)
-      .order('data_apontamento', { ascending: false })
+      .order('data_apontamento', { ascending: true })
       .limit(200)
     setDetalhe({ ordem: r.ordem, item: r.item_ccs, roteiro: r.operacoes, apont: data || [] })
     setLoadingDetalhe(false)
@@ -151,13 +163,22 @@ export default function Ordens() {
     setModal(r)
     setDescricao('')
     setSelectedResp(null)
-    // Busca só responsáveis que NÃO são auto_copia
+    setBuscaResp('')
+    setRespFiltrados([])
     const { data } = await supabase
       .from('responsaveis')
       .select('*')
       .eq('auto_copia', false)
       .order('nome')
     setResponsaveis(data || [])
+    setRespFiltrados(data || [])
+  }
+
+  function onBuscaResp(val) {
+    setBuscaResp(val)
+    if (!val) { setRespFiltrados(responsaveis); return }
+    const q = val.toLowerCase()
+    setRespFiltrados(responsaveis.filter(r => r.nome.toLowerCase().includes(q)))
   }
 
   async function reportar() {
@@ -170,8 +191,6 @@ export default function Ordens() {
         motivo: descricao, responsavel: selectedResp.nome,
         responsavel_email: selectedResp.email
       })
-
-      // Envia para o destinatário escolhido
       await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
         ordem: modal.ordem, item: modal.item_ccs,
         cliente: modal.cliente || '—', operacao: modal.prox_oper || '—',
@@ -180,12 +199,8 @@ export default function Ordens() {
         to_email: selectedResp.email
       }, EMAILJS_KEY)
 
-      // Busca e envia para todos os supervisores com auto_copia
       const { data: supervisores } = await supabase
-        .from('responsaveis')
-        .select('*')
-        .eq('auto_copia', true)
-
+        .from('responsaveis').select('*').eq('auto_copia', true)
       for (const sup of supervisores || []) {
         await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
           ordem: modal.ordem, item: modal.item_ccs,
@@ -196,8 +211,7 @@ export default function Ordens() {
         }, EMAILJS_KEY)
       }
 
-      setModal(null)
-      setDescricao('')
+      setModal(null); setDescricao('')
       showToast(`✅ Enviado para ${selectedResp.nome.split(' ')[0]}!`)
     } catch (err) {
       console.error(err)
@@ -347,11 +361,11 @@ export default function Ordens() {
         </>
       )}
 
-      {/* Modal detalhe */}
+      {/* Modal detalhe — cronológico por primeiro apontamento */}
       {detalhe && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', padding: 24, width: '100%', maxWidth: 480, maxHeight: '80vh', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>Roteiro de apontamentos</div>
                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>OP {detalhe.ordem} · {detalhe.item}</div>
@@ -361,12 +375,6 @@ export default function Ordens() {
               </button>
             </div>
 
-            {detalhe.roteiro && (
-              <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 16, fontFamily: 'monospace' }}>
-                {detalhe.roteiro}
-              </div>
-            )}
-
             {loadingDetalhe ? (
               <div style={{ textAlign: 'center', padding: 20, color: 'var(--muted)' }}>Carregando...</div>
             ) : detalhe.apont.length === 0 ? (
@@ -375,69 +383,64 @@ export default function Ordens() {
                 <p>Nenhum apontamento encontrado</p>
               </div>
             ) : (() => {
-              const roteiro = (detalhe.roteiro || '').split(',').map(s => s.trim()).filter(Boolean)
-              const apontPorOp = {}
+              // Agrupa por desc_operacao — usa primeiro apontamento pra ordenar
+              const grupos = {}
               detalhe.apont.forEach(a => {
-                const cod = (a.operacao || '').trim()
-                if (!apontPorOp[cod]) apontPorOp[cod] = []
-                apontPorOp[cod].push(a)
+                const chave = a.desc_operacao || nomeOp(a.operacao) || a.operacao || 'Outros'
+                if (!grupos[chave]) {
+                  grupos[chave] = {
+                    nome: chave,
+                    items: [],
+                    primeiraData: a.data_apontamento
+                  }
+                }
+                grupos[chave].items.push(a)
               })
-              const opsFora = Object.keys(apontPorOp).filter(op => !roteiro.includes(op))
-              const sequencia = [...roteiro, ...opsFora]
+
+              // Ordena grupos pelo primeiro apontamento
+              const gruposOrdenados = Object.values(grupos).sort((a, b) =>
+                parseData(a.primeiraData) - parseData(b.primeiraData)
+              )
+
               let qtdAnterior = null
 
-              return sequencia.map((cod) => {
-                const apont = apontPorOp[cod] || []
-                const temApont = apont.length > 0
-                const totalOK = apont.reduce((s, a) => s + (a.qtd_aprov || 0), 0)
-                const totalRef = apont.reduce((s, a) => s + (a.qtd_refug || 0), 0)
-                const ultimo = apont[0]
-                const dias = ultimo ? diasParado(ultimo.data_apontamento) : null
+              return gruposOrdenados.map((grupo, idx) => {
+                const totalOK = grupo.items.reduce((s, a) => s + (a.qtd_aprov || 0), 0)
+                const totalRef = grupo.items.reduce((s, a) => s + (a.qtd_refug || 0), 0)
+                const ultimo = [...grupo.items].sort((a, b) =>
+                  parseData(b.data_apontamento) - parseData(a.data_apontamento)
+                )[0]
+                const dias = diasParado(ultimo?.data_apontamento)
 
+                // Define ícone
                 let icone, corBorda
-                if (!temApont) { icone = '❌'; corBorda = 'var(--border)' }
-                else if (qtdAnterior !== null && totalOK < qtdAnterior) { icone = '⚠️'; corBorda = 'var(--yellow)' }
-                else { icone = '✅'; corBorda = 'var(--green)' }
-
-                const nomeDaOp = temApont ? (apont[0]?.desc_operacao || nomeOp(cod)) : nomeOp(cod)
-                if (temApont) qtdAnterior = totalOK
-
-                const isInicio = opsFora.length > 0 && cod === opsFora[0]
+                if (qtdAnterior !== null && totalOK < qtdAnterior) {
+                  icone = '⚠️'; corBorda = 'var(--yellow)'
+                } else {
+                  icone = '✅'; corBorda = 'var(--green)'
+                }
+                qtdAnterior = totalOK
 
                 return (
-                  <div key={cod}>
-                    {isInicio && (
-                      <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, margin: '12px 0 8px' }}>
-                        Outras operações
-                      </div>
-                    )}
+                  <div key={grupo.nome} style={{ marginBottom: 10 }}>
                     <div style={{
                       display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '10px 12px', marginBottom: 8,
-                      background: temApont ? 'var(--surface2)' : 'rgba(255,255,255,.02)',
-                      borderRadius: 8, border: `1px solid ${corBorda}`,
-                      opacity: temApont ? 1 : 0.5
+                      padding: '10px 12px', borderRadius: 8,
+                      background: 'var(--surface2)',
+                      border: `1px solid ${corBorda}33`
                     }}>
                       <div style={{ fontSize: 16, flexShrink: 0 }}>{icone}</div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: temApont ? 'var(--text)' : 'var(--muted)' }}>
-                          {nomeDaOp}
+                        <div style={{ fontSize: 12, fontWeight: 700 }}>{grupo.nome}</div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                          {ultimo?.data_apontamento} · {ultimo?.operador}
+                          {dias !== null ? ` · ${dias === 0 ? 'hoje' : dias + 'd atrás'}` : ''}
                         </div>
-                        {temApont ? (
-                          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                            {ultimo?.data_apontamento} · {ultimo?.operador}
-                            {dias !== null ? ` · ${dias === 0 ? 'hoje' : dias + 'd atrás'}` : ''}
-                          </div>
-                        ) : (
-                          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>Sem apontamento</div>
-                        )}
                       </div>
-                      {temApont && (
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, color: 'var(--green)' }}>{totalOK} pç</div>
-                          {totalRef > 0 && <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--red)' }}>{totalRef} ref.</div>}
-                        </div>
-                      )}
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, color: 'var(--green)' }}>{totalOK} pç</div>
+                        {totalRef > 0 && <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--red)' }}>{totalRef} ref.</div>}
+                      </div>
                     </div>
                   </div>
                 )
@@ -447,7 +450,7 @@ export default function Ordens() {
         </div>
       )}
 
-      {/* Modal reportar */}
+      {/* Modal reportar com autocomplete */}
       {modal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', padding: 24, width: '100%', maxWidth: 480, maxHeight: '80vh', overflowY: 'auto' }}>
@@ -464,31 +467,47 @@ export default function Ordens() {
 
             <div className="field">
               <label>Enviar para</label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {responsaveis.length === 0 ? (
-                  <div style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center', padding: 12 }}>
-                    Nenhum responsável cadastrado
-                  </div>
-                ) : responsaveis.map(r => (
-                  <div key={r.id}
-                    onClick={() => setSelectedResp(r)}
-                    style={{
-                      padding: '10px 14px', borderRadius: 10, cursor: 'pointer',
-                      border: `1px solid ${selectedResp?.id === r.id ? 'var(--accent)' : 'var(--border)'}`,
-                      background: selectedResp?.id === r.id ? 'rgba(0,229,255,.1)' : 'var(--surface2)',
-                      display: 'flex', alignItems: 'center', gap: 10
-                    }}>
-                    <div style={{
-                      width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-                      background: selectedResp?.id === r.id ? 'var(--accent)' : 'var(--border)'
-                    }} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700 }}>{r.nome}</div>
-                      <div style={{ fontSize: 11, color: 'var(--muted)' }}>{r.setor}</div>
+              <input className="input"
+                value={selectedResp ? selectedResp.nome : buscaResp}
+                onChange={e => { setSelectedResp(null); onBuscaResp(e.target.value) }}
+                placeholder="Digite o nome..."
+                style={{ marginBottom: 8 }}
+              />
+              {!selectedResp && buscaResp.length > 0 && respFiltrados.length > 0 && (
+                <div style={{
+                  background: 'var(--surface2)', border: '1px solid var(--accent)',
+                  borderRadius: 10, overflow: 'hidden', marginBottom: 8
+                }}>
+                  {respFiltrados.map(r => (
+                    <div key={r.id} onClick={() => { setSelectedResp(r); setBuscaResp('') }}
+                      style={{
+                        padding: '10px 14px', cursor: 'pointer',
+                        borderBottom: '1px solid var(--border)',
+                        display: 'flex', alignItems: 'center', gap: 10
+                      }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700 }}>{r.nome}</div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>{r.setor}</div>
+                      </div>
                     </div>
+                  ))}
+                </div>
+              )}
+              {selectedResp && (
+                <div style={{
+                  background: 'rgba(0,229,255,.1)', border: '1px solid rgba(0,229,255,.3)',
+                  borderRadius: 8, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8
+                }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700 }}>{selectedResp.nome}</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>{selectedResp.setor}</div>
                   </div>
-                ))}
-              </div>
+                  <button onClick={() => { setSelectedResp(null); setBuscaResp('') }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}>
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="field">

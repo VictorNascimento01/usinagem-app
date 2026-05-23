@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom'
-import { ClipboardList, Search, Package, Lock, LogOut, Activity } from 'lucide-react'
+import { ClipboardList, Search, Package, Lock, LogOut, Activity, Zap } from 'lucide-react'
 import Formulario from './pages/Formulario'
 import Consulta from './pages/Consulta'
 import Ordens from './pages/Ordens'
 import Admin from './pages/Admin'
 import Login from './pages/Login'
 import Sequor from './pages/Sequor'
+import Laser from './pages/Laser'
 import './App.css'
 
 const SENHA_APP = 'ccs2024'
@@ -102,6 +103,7 @@ function Layout({ usuario, onLogout }) {
           <Route path="/consulta" element={<Consulta />} />
           <Route path="/ordens" element={<Ordens usuario={usuario} />} />
           <Route path="/sequor" element={<Sequor />} />
+          <Route path="/laser" element={<Laser />} />
           <Route path="/admin" element={<Admin usuario={usuario} />} />
         </Routes>
       </main>
@@ -122,6 +124,10 @@ function Layout({ usuario, onLogout }) {
         <NavLink to="/sequor" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
           <Activity size={22} />
           <span>Sequor</span>
+        </NavLink>
+        <NavLink to="/laser" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+          <Zap size={22} />
+          <span>Laser</span>
         </NavLink>
       </nav>
     </div>
