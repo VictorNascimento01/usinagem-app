@@ -6,7 +6,6 @@ import emailjs from '@emailjs/browser'
 const EMAILJS_SERVICE = 'service_b110i99'
 const EMAILJS_TEMPLATE = 'template_1gm1y15'
 const EMAILJS_KEY = 'TrKMj1WLgqrejytoU'
-const EMAIL_LIDER = 'victor147nascimento@gmail.com'
 
 const PLANTAS = [
   { key: 'todas', label: '🏭 Todas' },
@@ -87,6 +86,8 @@ export default function Ordens() {
   const [descricao, setDescricao] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [toast, setToast] = useState(null)
+  const [responsaveis, setResponsaveis] = useState([])
+  const [selectedResp, setSelectedResp] = useState(null)
 
   function showToast(msg, cor = 'var(--green)') {
     setToast({ msg, cor })
@@ -141,28 +142,67 @@ export default function Ordens() {
       .select('*')
       .eq('ordem', r.ordem)
       .order('data_apontamento', { ascending: false })
-      .limit(100)
+      .limit(200)
     setDetalhe({ ordem: r.ordem, item: r.item_ccs, roteiro: r.operacoes, apont: data || [] })
     setLoadingDetalhe(false)
   }
 
+  async function abrirModal(r) {
+    setModal(r)
+    setDescricao('')
+    setSelectedResp(null)
+    // Busca só responsáveis que NÃO são auto_copia
+    const { data } = await supabase
+      .from('responsaveis')
+      .select('*')
+      .eq('auto_copia', false)
+      .order('nome')
+    setResponsaveis(data || [])
+  }
+
   async function reportar() {
     if (!descricao) { showToast('Descreva o problema!', 'var(--red)'); return }
+    if (!selectedResp) { showToast('Selecione o destinatário!', 'var(--red)'); return }
     setEnviando(true)
     try {
       await supabase.from('apontamentos').insert({
         ordem: modal.ordem, item: modal.item_ccs,
-        motivo: descricao, responsavel: 'Operador'
+        motivo: descricao, responsavel: selectedResp.nome,
+        responsavel_email: selectedResp.email
       })
+
+      // Envia para o destinatário escolhido
       await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
         ordem: modal.ordem, item: modal.item_ccs,
         cliente: modal.cliente || '—', operacao: modal.prox_oper || '—',
         saldo: modal.saldo, descricao,
-        horario: new Date().toLocaleString('pt-BR'), to_email: EMAIL_LIDER
+        horario: new Date().toLocaleString('pt-BR'),
+        to_email: selectedResp.email
       }, EMAILJS_KEY)
-      setModal(null); setDescricao('')
-      showToast('✅ Reporte enviado!')
-    } catch { showToast('Erro ao enviar!', 'var(--red)') }
+
+      // Busca e envia para todos os supervisores com auto_copia
+      const { data: supervisores } = await supabase
+        .from('responsaveis')
+        .select('*')
+        .eq('auto_copia', true)
+
+      for (const sup of supervisores || []) {
+        await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
+          ordem: modal.ordem, item: modal.item_ccs,
+          cliente: modal.cliente || '—', operacao: modal.prox_oper || '—',
+          saldo: modal.saldo, descricao,
+          horario: new Date().toLocaleString('pt-BR'),
+          to_email: sup.email
+        }, EMAILJS_KEY)
+      }
+
+      setModal(null)
+      setDescricao('')
+      showToast(`✅ Enviado para ${selectedResp.nome.split(' ')[0]}!`)
+    } catch (err) {
+      console.error(err)
+      showToast('Erro ao enviar!', 'var(--red)')
+    }
     setEnviando(false)
   }
 
@@ -287,7 +327,7 @@ export default function Ordens() {
                               }}>
                                 <ChevronRight size={12} /> Detalhar
                               </button>
-                              <button onClick={() => { setModal(r); setDescricao('') }} style={{
+                              <button onClick={() => abrirModal(r)} style={{
                                 background: 'rgba(255,107,53,.15)', border: '1px solid rgba(255,107,53,.4)',
                                 borderRadius: 8, padding: '5px 8px', cursor: 'pointer',
                                 color: '#ff6b35', display: 'flex', alignItems: 'center'
@@ -307,19 +347,25 @@ export default function Ordens() {
         </>
       )}
 
-      {/* Modal detalhe — agrupado por operação com nome real */}
+      {/* Modal detalhe */}
       {detalhe && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', padding: 24, width: '100%', maxWidth: 480, maxHeight: '80vh', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>Histórico de apontamentos</div>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>Roteiro de apontamentos</div>
                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>OP {detalhe.ordem} · {detalhe.item}</div>
               </div>
               <button onClick={() => setDetalhe(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}>
                 <X size={20} />
               </button>
             </div>
+
+            {detalhe.roteiro && (
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 16, fontFamily: 'monospace' }}>
+                {detalhe.roteiro}
+              </div>
+            )}
 
             {loadingDetalhe ? (
               <div style={{ textAlign: 'center', padding: 20, color: 'var(--muted)' }}>Carregando...</div>
@@ -329,66 +375,70 @@ export default function Ordens() {
                 <p>Nenhum apontamento encontrado</p>
               </div>
             ) : (() => {
-              // Agrupa por operação usando desc_operacao como nome
-              const grupos = {}
-              const ordemGrupos = []
+              const roteiro = (detalhe.roteiro || '').split(',').map(s => s.trim()).filter(Boolean)
+              const apontPorOp = {}
               detalhe.apont.forEach(a => {
-                const chave = a.operacao || 'outros'
-                if (!grupos[chave]) {
-                  grupos[chave] = { nome: a.desc_operacao || nomeOp(a.operacao) || chave, items: [] }
-                  ordemGrupos.push(chave)
-                }
-                grupos[chave].items.push(a)
+                const cod = (a.operacao || '').trim()
+                if (!apontPorOp[cod]) apontPorOp[cod] = []
+                apontPorOp[cod].push(a)
               })
+              const opsFora = Object.keys(apontPorOp).filter(op => !roteiro.includes(op))
+              const sequencia = [...roteiro, ...opsFora]
+              let qtdAnterior = null
 
-              return ordemGrupos.map(chave => {
-                const grupo = grupos[chave]
-                const totalOK = grupo.items.reduce((s, a) => s + (a.qtd_aprov || 0), 0)
-                const totalRef = grupo.items.reduce((s, a) => s + (a.qtd_refug || 0), 0)
-                const ultimo = grupo.items[0]
-                const dias = diasParado(ultimo?.data_apontamento)
-                const cor = corParado(dias)
+              return sequencia.map((cod) => {
+                const apont = apontPorOp[cod] || []
+                const temApont = apont.length > 0
+                const totalOK = apont.reduce((s, a) => s + (a.qtd_aprov || 0), 0)
+                const totalRef = apont.reduce((s, a) => s + (a.qtd_refug || 0), 0)
+                const ultimo = apont[0]
+                const dias = ultimo ? diasParado(ultimo.data_apontamento) : null
+
+                let icone, corBorda
+                if (!temApont) { icone = '❌'; corBorda = 'var(--border)' }
+                else if (qtdAnterior !== null && totalOK < qtdAnterior) { icone = '⚠️'; corBorda = 'var(--yellow)' }
+                else { icone = '✅'; corBorda = 'var(--green)' }
+
+                const nomeDaOp = temApont ? (apont[0]?.desc_operacao || nomeOp(cod)) : nomeOp(cod)
+                if (temApont) qtdAnterior = totalOK
+
+                const isInicio = opsFora.length > 0 && cod === opsFora[0]
 
                 return (
-                  <div key={chave} style={{ marginBottom: 14 }}>
-                    {/* Header do grupo */}
+                  <div key={cod}>
+                    {isInicio && (
+                      <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, margin: '12px 0 8px' }}>
+                        Outras operações
+                      </div>
+                    )}
                     <div style={{
-                      background: 'var(--surface2)', borderRadius: 8,
-                      padding: '9px 12px', marginBottom: 6,
-                      display: 'flex', alignItems: 'center', gap: 8,
-                      border: `1px solid ${cor}33`
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '10px 12px', marginBottom: 8,
+                      background: temApont ? 'var(--surface2)' : 'rgba(255,255,255,.02)',
+                      borderRadius: 8, border: `1px solid ${corBorda}`,
+                      opacity: temApont ? 1 : 0.5
                     }}>
-                      <div style={{ width: 7, height: 7, borderRadius: '50%', background: cor, flexShrink: 0 }} />
+                      <div style={{ fontSize: 16, flexShrink: 0 }}>{icone}</div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700 }}>{grupo.nome}</div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>
-                          {grupo.items.length} registro(s) · último: {ultimo?.data_apontamento}
+                        <div style={{ fontSize: 12, fontWeight: 700, color: temApont ? 'var(--text)' : 'var(--muted)' }}>
+                          {nomeDaOp}
                         </div>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: 'var(--green)' }}>{totalOK} pç</div>
-                        {totalRef > 0 && <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--red)' }}>{totalRef} ref.</div>}
-                      </div>
-                    </div>
-
-                    {/* Registros */}
-                    {grupo.items.map((a, i) => (
-                      <div key={i} style={{
-                        padding: '7px 12px', borderBottom: '1px solid var(--border)',
-                        display: 'flex', alignItems: 'center', gap: 10
-                      }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-                            {a.data_apontamento} às {a.hora} · {a.operador}
+                        {temApont ? (
+                          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                            {ultimo?.data_apontamento} · {ultimo?.operador}
+                            {dias !== null ? ` · ${dias === 0 ? 'hoje' : dias + 'd atrás'}` : ''}
                           </div>
-                          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>{a.maquina}</div>
-                        </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: 'var(--green)' }}>{a.qtd_aprov} pç</div>
-                          {a.qtd_refug > 0 && <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--red)' }}>{a.qtd_refug} ref.</div>}
-                        </div>
+                        ) : (
+                          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>Sem apontamento</div>
+                        )}
                       </div>
-                    ))}
+                      {temApont && (
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, color: 'var(--green)' }}>{totalOK} pç</div>
+                          {totalRef > 0 && <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--red)' }}>{totalRef} ref.</div>}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )
               })
@@ -400,7 +450,7 @@ export default function Ordens() {
       {/* Modal reportar */}
       {modal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200 }}>
-          <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', padding: 24, width: '100%', maxWidth: 480 }}>
+          <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', padding: 24, width: '100%', maxWidth: 480, maxHeight: '80vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
               <AlertTriangle size={20} color="#ff6b35" />
               <div style={{ flex: 1 }}>
@@ -411,14 +461,45 @@ export default function Ordens() {
                 <X size={20} />
               </button>
             </div>
+
+            <div className="field">
+              <label>Enviar para</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {responsaveis.length === 0 ? (
+                  <div style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center', padding: 12 }}>
+                    Nenhum responsável cadastrado
+                  </div>
+                ) : responsaveis.map(r => (
+                  <div key={r.id}
+                    onClick={() => setSelectedResp(r)}
+                    style={{
+                      padding: '10px 14px', borderRadius: 10, cursor: 'pointer',
+                      border: `1px solid ${selectedResp?.id === r.id ? 'var(--accent)' : 'var(--border)'}`,
+                      background: selectedResp?.id === r.id ? 'rgba(0,229,255,.1)' : 'var(--surface2)',
+                      display: 'flex', alignItems: 'center', gap: 10
+                    }}>
+                    <div style={{
+                      width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                      background: selectedResp?.id === r.id ? 'var(--accent)' : 'var(--border)'
+                    }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700 }}>{r.nome}</div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)' }}>{r.setor}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="field">
               <label>Descreva o problema</label>
               <textarea className="input" value={descricao} onChange={e => setDescricao(e.target.value)}
                 placeholder="Ex: peça com defeito, falta material, máquina parada..."
                 style={{ minHeight: 100, resize: 'vertical', fontSize: 14 }} />
             </div>
+
             <button className="btn-primary" onClick={reportar} disabled={enviando}>
-              {enviando ? 'Enviando...' : '⚠️ Enviar para o líder'}
+              {enviando ? 'Enviando...' : `⚠️ Enviar${selectedResp ? ' para ' + selectedResp.nome.split(' ')[0] : ''}`}
             </button>
           </div>
         </div>
