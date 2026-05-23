@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom'
-import { ClipboardList, Search, Package, Lock, LogOut } from 'lucide-react'
+import { ClipboardList, Search, Package, Lock, LogOut, Activity } from 'lucide-react'
 import Formulario from './pages/Formulario'
 import Consulta from './pages/Consulta'
 import Ordens from './pages/Ordens'
 import Admin from './pages/Admin'
 import Login from './pages/Login'
+import Sequor from './pages/Sequor'
 import './App.css'
 
 const SENHA_APP = 'ccs2024'
@@ -36,11 +37,9 @@ function Manutencao({ onSenha }) {
         justifyContent: 'center', fontSize: 26, marginBottom: 20
       }}>⚙️</div>
 
-      <h1 style={{
-        fontFamily: 'monospace', fontSize: 22,
-        color: 'var(--accent)', marginBottom: 6
-      }}>USINAGEM APP</h1>
-
+      <h1 style={{ fontFamily: 'monospace', fontSize: 22, color: 'var(--accent)', marginBottom: 6 }}>
+        USINAGEM APP
+      </h1>
       <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 32, textAlign: 'center' }}>
         Sistema em configuração — acesso restrito
       </p>
@@ -49,24 +48,15 @@ function Manutencao({ onSenha }) {
         <div className="card">
           <div className="field">
             <label>Senha de acesso</label>
-            <input
-              className="input"
-              type="password"
-              value={senha}
+            <input className="input" type="password" value={senha}
               onChange={e => setSenha(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && tentar()}
               placeholder="Digite a senha..."
               style={{ borderColor: erro ? 'var(--red)' : undefined }}
             />
-            {erro && (
-              <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 6 }}>
-                ❌ Senha incorreta!
-              </div>
-            )}
+            {erro && <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 6 }}>❌ Senha incorreta!</div>}
           </div>
-          <button className="btn-primary" onClick={tentar}>
-            Entrar
-          </button>
+          <button className="btn-primary" onClick={tentar}>Entrar</button>
         </div>
       </div>
     </div>
@@ -88,9 +78,7 @@ function Layout({ usuario, onLogout }) {
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>
             {usuario.nivel === 'super' ? '👑 Super Admin' : 'Olá,'}
           </div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
-            {usuario.nome}
-          </div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{usuario.nome}</div>
         </div>
         <button onClick={() => navigate('/admin')} style={{
           background: 'var(--surface2)', border: '1px solid var(--border)',
@@ -113,6 +101,7 @@ function Layout({ usuario, onLogout }) {
           <Route path="/" element={<Formulario usuario={usuario} />} />
           <Route path="/consulta" element={<Consulta />} />
           <Route path="/ordens" element={<Ordens usuario={usuario} />} />
+          <Route path="/sequor" element={<Sequor />} />
           <Route path="/admin" element={<Admin usuario={usuario} />} />
         </Routes>
       </main>
@@ -130,6 +119,10 @@ function Layout({ usuario, onLogout }) {
           <Package size={22} />
           <span>Ordens</span>
         </NavLink>
+        <NavLink to="/sequor" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+          <Activity size={22} />
+          <span>Sequor</span>
+        </NavLink>
       </nav>
     </div>
   )
@@ -142,7 +135,6 @@ export default function App() {
   useEffect(() => {
     const key = sessionStorage.getItem('appkey')
     if (key === SENHA_APP) setLiberado(true)
-
     const salvo = localStorage.getItem('usuario')
     if (salvo) setUsuario(JSON.parse(salvo))
   }, [])
