@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, useNavigate, Navigate } from 'react-router-dom'
-import { ClipboardList, Search, Package, Lock, LogOut, Activity, Zap } from 'lucide-react'
+import { ClipboardList, Search, Package, Lock, LogOut, Activity, Zap, Users } from 'lucide-react'
+import { supabase } from './lib/supabase'
 import Formulario from './pages/Formulario'
 import Consulta from './pages/Consulta'
 import Ordens from './pages/Ordens'
@@ -8,6 +9,7 @@ import Admin from './pages/Admin'
 import Login from './pages/Login'
 import Sequor from './pages/Sequor'
 import Laser from './pages/Laser'
+import Equipe from './pages/Equipe'
 import './App.css'
 
 const SENHA_APP = 'ccs2024'
@@ -64,6 +66,7 @@ function Manutencao({ onSenha }) {
 
 function Layout({ usuario, onLogout }) {
   const navigate = useNavigate()
+  const isLiderOuMais = ['lider', 'supervisor', 'super'].includes(usuario?.nivel)
 
   return (
     <div className="app">
@@ -75,17 +78,21 @@ function Layout({ usuario, onLogout }) {
       }}>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-            {usuario.nivel === 'super' ? '👑 Super Admin' : 'Olá,'}
+            {usuario.nivel === 'super' ? '👑 Super Admin' :
+             usuario.nivel === 'supervisor' ? '🎖️ Supervisor' :
+             usuario.nivel === 'lider' ? '⭐ Líder' : 'Olá,'}
           </div>
           <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{usuario.nome}</div>
         </div>
-        <button onClick={() => navigate('/admin')} style={{
-          background: 'var(--surface2)', border: '1px solid var(--border)',
-          borderRadius: 8, padding: '7px 10px', cursor: 'pointer',
-          color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12
-        }}>
-          <Lock size={13} /> Admin
-        </button>
+        {isLiderOuMais && (
+          <button onClick={() => navigate('/admin')} style={{
+            background: 'var(--surface2)', border: '1px solid var(--border)',
+            borderRadius: 8, padding: '7px 10px', cursor: 'pointer',
+            color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12
+          }}>
+            <Lock size={13} /> Admin
+          </button>
+        )}
         <button onClick={onLogout} style={{
           background: 'none', border: '1px solid var(--border)',
           borderRadius: 8, padding: '7px 10px', cursor: 'pointer',
@@ -102,6 +109,7 @@ function Layout({ usuario, onLogout }) {
           <Route path="/ordens" element={<Ordens usuario={usuario} />} />
           <Route path="/sequor" element={<Sequor />} />
           <Route path="/laser" element={<Laser />} />
+          <Route path="/equipe" element={<Equipe usuario={usuario} />} />
           <Route path="/admin" element={<Admin usuario={usuario} />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
@@ -128,6 +136,12 @@ function Layout({ usuario, onLogout }) {
           <Zap size={22} />
           <span>Laser</span>
         </NavLink>
+        {isLiderOuMais && (
+          <NavLink to="/equipe" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+            <Users size={22} />
+            <span>Equipe</span>
+          </NavLink>
+        )}
       </nav>
     </div>
   )
@@ -136,12 +150,33 @@ function Layout({ usuario, onLogout }) {
 export default function App() {
   const [liberado, setLiberado] = useState(false)
   const [usuario, setUsuario] = useState(null)
+  const [carregando, setCarregando] = useState(true)
 
   useEffect(() => {
     const key = sessionStorage.getItem('appkey')
     if (key === SENHA_APP) setLiberado(true)
+
     const salvo = localStorage.getItem('usuario')
-    if (salvo) setUsuario(JSON.parse(salvo))
+    if (salvo) {
+      const usuarioLocal = JSON.parse(salvo)
+      // Busca dados frescos do banco sempre
+      supabase
+        .from('usuarios')
+        .select('*')
+        .ilike('email', usuarioLocal.email)
+        .single()
+        .then(({ data }) => {
+          if (data) {
+            localStorage.setItem('usuario', JSON.stringify(data))
+            setUsuario(data)
+          } else {
+            setUsuario(usuarioLocal)
+          }
+          setCarregando(false)
+        })
+    } else {
+      setCarregando(false)
+    }
   }, [])
 
   function onSenha() { setLiberado(true) }
@@ -151,6 +186,7 @@ export default function App() {
     setUsuario(null)
   }
 
+  if (carregando) return null
   if (!liberado) return <Manutencao onSenha={onSenha} />
   if (!usuario) return <Login onLogin={onLogin} />
 

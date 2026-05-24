@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react'
-import { Settings, Trash2, CheckCircle, LogOut } from 'lucide-react'
+import { Settings, Trash2, CheckCircle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 const SENHA_ADMIN = 'usi2024'
 
 const SETORES = [
   'Usinagem', 'Rosqueadeira', 'Robô de Solda', 'Calandra',
-  'Dobradeira', 'Laser', 'Pintura', 'Expedição', 'PCP', 'Qualidade', 'Outro'
+  'Dobradeira', 'Laser', 'Pintura', 'Expedição', 'PCP', 'Qualidade', 'Geral', 'Outro'
 ]
 
 const NIVEIS = ['operador', 'lider', 'supervisor', 'super']
 
-export default function Admin({ usuario, onLogout }) {
+export default function Admin({ usuario }) {
   const [autenticado, setAutenticado] = useState(false)
   const [senha, setSenha] = useState('')
   const [toast, setToast] = useState(null)
@@ -21,8 +21,11 @@ export default function Admin({ usuario, onLogout }) {
   const [usuarios, setUsuarios] = useState([])
   const [lancamentos, setLancamentos] = useState([])
   const [abaAtiva, setAbaAtiva] = useState('status')
-  const [novoResp, setNovoResp] = useState({ nome: '', email: '', setor: '' })
   const [adicionando, setAdicionando] = useState(false)
+  const [novaP, setNovaP] = useState({
+    nome: '', email: '', estab: '200', nivel: 'operador',
+    setor: '', notificacao: false
+  })
 
   useEffect(() => {
     if (usuario?.nivel === 'super') {
@@ -96,32 +99,53 @@ export default function Admin({ usuario, onLogout }) {
     showToast('✅ Todos os reportes limpos!')
   }
 
-  async function adicionarResponsavel() {
-    if (!novoResp.nome || !novoResp.email || !novoResp.setor) {
+  async function adicionarPessoa() {
+    if (!novaP.nome || !novaP.email || !novaP.estab || !novaP.setor) {
       showToast('Preencha todos os campos!', 'var(--red)')
       return
     }
     setAdicionando(true)
-    const { data, error } = await supabase
-      .from('responsaveis')
-      .insert({ ...novoResp, auto_copia: false })
-      .select()
-      .single()
 
-    if (error) {
-      showToast('Erro ao adicionar!', 'var(--red)')
-    } else {
-      setResponsaveis(prev => [...prev, data])
-      setNovoResp({ nome: '', email: '', setor: '' })
-      showToast('✅ Responsável adicionado!')
+    // Cadastra como usuário
+    const { error: errUser } = await supabase.from('usuarios').upsert({
+      nome: novaP.nome,
+      email: novaP.email,
+      nivel: novaP.nivel,
+      estab: novaP.estab,
+      setor: novaP.setor,
+      ativo: true
+    }, { onConflict: 'email' })
+
+    if (errUser) {
+      showToast('Erro ao cadastrar usuário!', 'var(--red)')
+      setAdicionando(false)
+      return
     }
+
+    // Cadastra como responsável (para receber reportes)
+    const { error: errResp } = await supabase.from('responsaveis').upsert({
+      nome: novaP.nome,
+      email: novaP.email,
+      setor: novaP.setor,
+      auto_copia: novaP.notificacao
+    }, { onConflict: 'email' })
+
+    if (errResp) {
+      showToast('Erro ao cadastrar responsável!', 'var(--red)')
+      setAdicionando(false)
+      return
+    }
+
+    await carregarDados()
+    setNovaP({ nome: '', email: '', estab: '200', nivel: 'operador', setor: '', notificacao: false })
+    showToast('✅ Pessoa cadastrada com sucesso!')
     setAdicionando(false)
   }
 
-  async function removerResponsavel(id) {
+  async function removerResponsavel(id, email) {
     await supabase.from('responsaveis').delete().eq('id', id)
     setResponsaveis(prev => prev.filter(r => r.id !== id))
-    showToast('✅ Removido!')
+    showToast('✅ Removido da lista de notificações!')
   }
 
   async function toggleAutoCopia(r) {
@@ -150,6 +174,29 @@ export default function Admin({ usuario, onLogout }) {
     setLancamentos(prev => prev.filter(l => l.id !== id))
     setStats(prev => ({ ...prev, totalLancamentos: prev.totalLancamentos - 1 }))
     showToast('✅ Lançamento removido!')
+  }
+
+  async function limparLaserPlanejamento() {
+    if (!confirm('Limpar todos os planejamentos laser?')) return
+    await supabase.from('laser_planejamento').delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000')
+    showToast('✅ Planejamentos laser limpos!')
+  }
+
+  async function limparLaserApontamento() {
+    if (!confirm('Limpar todos os apontamentos laser?')) return
+    await supabase.from('laser_apontamento').delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000')
+    showToast('✅ Apontamentos laser limpos!')
+  }
+
+  async function limparLancamentos() {
+    if (!confirm('Limpar todos os lançamentos?')) return
+    await supabase.from('lancamentos').delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000')
+    setLancamentos([])
+    setStats(prev => ({ ...prev, totalLancamentos: 0 }))
+    showToast('✅ Lançamentos limpos!')
   }
 
   if (!autenticado) {
@@ -216,8 +263,8 @@ export default function Admin({ usuario, onLogout }) {
           { key: 'status', label: '🟢 Status' },
           { key: 'reportes', label: `⚠️ Reportes${stats?.totalReportes > 0 ? ` (${stats.totalReportes})` : ''}` },
           { key: 'lancamentos', label: '📋 Lançamentos' },
-          { key: 'responsaveis', label: '👤 Responsáveis' },
-          { key: 'usuarios', label: `👥 Usuários (${usuarios.length})` },
+          { key: 'responsaveis', label: '👥 Pessoas' },
+          { key: 'usuarios', label: `⚙️ Usuários (${usuarios.length})` },
         ].map(({ key, label }) => (
           <button key={key} onClick={() => setAbaAtiva(key)} style={{
             flex: 1, padding: '10px 4px', border: '1px solid',
@@ -231,15 +278,38 @@ export default function Admin({ usuario, onLogout }) {
 
       {/* Status */}
       {abaAtiva === 'status' && (
-        <div className="card">
-          <div className="card-title">ℹ️ Status do sistema</div>
-          <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.8 }}>
-            <div>🟢 <strong style={{ color: 'var(--text)' }}>Banco de dados</strong> — Supabase online</div>
-            <div>🔄 <strong style={{ color: 'var(--text)' }}>Ordens</strong> — atualizadas automaticamente</div>
-            <div>📋 <strong style={{ color: 'var(--text)' }}>Lançamentos</strong> — salvos em tempo real</div>
-            <div>⚠️ <strong style={{ color: 'var(--text)' }}>Reportes</strong> — enviados ao responsável</div>
+        <>
+          <div className="card">
+            <div className="card-title">ℹ️ Status do sistema</div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.8 }}>
+              <div>🟢 <strong style={{ color: 'var(--text)' }}>Banco de dados</strong> — Supabase online</div>
+              <div>🔄 <strong style={{ color: 'var(--text)' }}>Ordens</strong> — atualizadas automaticamente</div>
+              <div>📋 <strong style={{ color: 'var(--text)' }}>Lançamentos</strong> — salvos em tempo real</div>
+              <div>⚠️ <strong style={{ color: 'var(--text)' }}>Reportes</strong> — enviados ao responsável</div>
+            </div>
           </div>
-        </div>
+
+          <div className="card" style={{ marginTop: 12 }}>
+            <div className="card-title">🗑️ Limpar dados</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <button onClick={limparLaserPlanejamento} style={{
+                background: 'rgba(255,61,90,.08)', border: '1px solid rgba(255,61,90,.3)',
+                borderRadius: 8, padding: '10px 14px', color: 'var(--red)',
+                cursor: 'pointer', fontSize: 13, fontWeight: 700, textAlign: 'left'
+              }}>🗑️ Limpar planejamentos laser</button>
+              <button onClick={limparLaserApontamento} style={{
+                background: 'rgba(255,61,90,.08)', border: '1px solid rgba(255,61,90,.3)',
+                borderRadius: 8, padding: '10px 14px', color: 'var(--red)',
+                cursor: 'pointer', fontSize: 13, fontWeight: 700, textAlign: 'left'
+              }}>🗑️ Limpar apontamentos laser</button>
+              <button onClick={limparLancamentos} style={{
+                background: 'rgba(255,61,90,.08)', border: '1px solid rgba(255,61,90,.3)',
+                borderRadius: 8, padding: '10px 14px', color: 'var(--red)',
+                cursor: 'pointer', fontSize: 13, fontWeight: 700, textAlign: 'left'
+              }}>🗑️ Limpar todos os lançamentos</button>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Reportes */}
@@ -258,10 +328,7 @@ export default function Admin({ usuario, onLogout }) {
             </div>
           )}
           {reportes.length === 0 ? (
-            <div className="empty">
-              <div className="emoji">✅</div>
-              <h3>Nenhum reporte pendente</h3>
-            </div>
+            <div className="empty"><div className="emoji">✅</div><h3>Nenhum reporte pendente</h3></div>
           ) : (
             reportes.map(r => (
               <div key={r.id} className="card" style={{ marginBottom: 10 }}>
@@ -302,14 +369,9 @@ export default function Admin({ usuario, onLogout }) {
       {/* Lançamentos */}
       {abaAtiva === 'lancamentos' && (
         <div>
-          <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 14 }}>
-            Últimos 50 lançamentos
-          </p>
+          <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 14 }}>Últimos 50 lançamentos</p>
           {lancamentos.length === 0 ? (
-            <div className="empty">
-              <div className="emoji">📋</div>
-              <h3>Nenhum lançamento</h3>
-            </div>
+            <div className="empty"><div className="emoji">📋</div><h3>Nenhum lançamento</h3></div>
           ) : (
             lancamentos.map(l => (
               <div key={l.id} className="card" style={{ marginBottom: 8 }}>
@@ -341,40 +403,106 @@ export default function Admin({ usuario, onLogout }) {
         </div>
       )}
 
-      {/* Responsáveis */}
+      {/* Pessoas — cadastro unificado */}
       {abaAtiva === 'responsaveis' && (
         <div>
+          {/* Formulário cadastro */}
           <div className="card" style={{ marginBottom: 16 }}>
-            <div className="card-title">➕ Adicionar responsável</div>
+            <div className="card-title">➕ Cadastrar pessoa</div>
+
             <div className="field">
               <label>Nome</label>
-              <input className="input" value={novoResp.nome}
-                onChange={e => setNovoResp(p => ({ ...p, nome: e.target.value }))}
+              <input className="input" value={novaP.nome}
+                onChange={e => setNovaP(p => ({ ...p, nome: e.target.value }))}
                 placeholder="Ex: João Silva" />
             </div>
+
             <div className="field">
               <label>Email</label>
-              <input className="input" type="email" value={novoResp.email}
-                onChange={e => setNovoResp(p => ({ ...p, email: e.target.value }))}
+              <input className="input" type="email" value={novaP.email}
+                onChange={e => setNovaP(p => ({ ...p, email: e.target.value }))}
                 placeholder="Ex: joao@empresa.com" />
             </div>
+
+            <div className="field">
+              <label>Estabelecimento</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {[
+                  { key: '100', label: '📍 Limeira' },
+                  { key: '200', label: '📍 Palmeira' },
+                  { key: 'todas', label: '🏭 Todas' },
+                ].map(({ key, label }) => (
+                  <button key={key} onClick={() => setNovaP(p => ({ ...p, estab: key }))} style={{
+                    flex: 1, padding: '9px 4px', border: '1px solid',
+                    borderColor: novaP.estab === key ? 'var(--accent)' : 'var(--border)',
+                    background: novaP.estab === key ? 'rgba(0,229,255,.1)' : 'var(--surface2)',
+                    color: novaP.estab === key ? 'var(--accent)' : 'var(--muted)',
+                    borderRadius: 8, fontWeight: 700, fontSize: 11, cursor: 'pointer'
+                  }}>{label}</button>
+                ))}
+              </div>
+            </div>
+
+            <div className="field">
+              <label>Nível de acesso</label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {[
+                  { key: 'operador', label: '👤 Operador' },
+                  { key: 'lider', label: '⭐ Líder' },
+                  { key: 'supervisor', label: '🎖️ Supervisor' },
+                ].map(({ key, label }) => (
+                  <button key={key} onClick={() => setNovaP(p => ({ ...p, nivel: key }))} style={{
+                    flex: 1, padding: '9px 4px', border: '1px solid',
+                    borderColor: novaP.nivel === key ? 'var(--accent)' : 'var(--border)',
+                    background: novaP.nivel === key ? 'rgba(0,229,255,.1)' : 'var(--surface2)',
+                    color: novaP.nivel === key ? 'var(--accent)' : 'var(--muted)',
+                    borderRadius: 8, fontWeight: 700, fontSize: 11, cursor: 'pointer'
+                  }}>{label}</button>
+                ))}
+              </div>
+            </div>
+
             <div className="field">
               <label>Setor</label>
-              <select className="input" value={novoResp.setor}
-                onChange={e => setNovoResp(p => ({ ...p, setor: e.target.value }))}>
+              <select className="input" value={novaP.setor}
+                onChange={e => setNovaP(p => ({ ...p, setor: e.target.value }))}>
                 <option value="">Selecione o setor</option>
                 {SETORES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
-            <button className="btn-primary" onClick={adicionarResponsavel} disabled={adicionando}>
-              {adicionando ? 'Adicionando...' : '➕ Adicionar'}
+
+            <div className="field">
+              <label>Notificações por email</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {[
+                  { key: false, label: '🔕 Não receber' },
+                  { key: true, label: '📧 Receber cópia automática' },
+                ].map(({ key, label }) => (
+                  <button key={String(key)} onClick={() => setNovaP(p => ({ ...p, notificacao: key }))} style={{
+                    flex: 1, padding: '9px 4px', border: '1px solid',
+                    borderColor: novaP.notificacao === key ? 'var(--green)' : 'var(--border)',
+                    background: novaP.notificacao === key ? 'rgba(0,255,136,.1)' : 'var(--surface2)',
+                    color: novaP.notificacao === key ? 'var(--green)' : 'var(--muted)',
+                    borderRadius: 8, fontWeight: 700, fontSize: 11, cursor: 'pointer'
+                  }}>{label}</button>
+                ))}
+              </div>
+            </div>
+
+            <button className="btn-primary" onClick={adicionarPessoa} disabled={adicionando}>
+              {adicionando ? 'Cadastrando...' : '➕ Cadastrar pessoa'}
             </button>
+          </div>
+
+          {/* Lista de responsáveis */}
+          <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
+            Pessoas cadastradas ({responsaveis.length})
           </div>
 
           {responsaveis.length === 0 ? (
             <div className="empty">
               <div className="emoji">👤</div>
-              <h3>Nenhum responsável cadastrado</h3>
+              <h3>Nenhuma pessoa cadastrada</h3>
             </div>
           ) : (
             responsaveis.map(r => (
@@ -407,7 +535,7 @@ export default function Admin({ usuario, onLogout }) {
                       </div>
                     </div>
                   </div>
-                  <button onClick={() => removerResponsavel(r.id)} style={{
+                  <button onClick={() => removerResponsavel(r.id, r.email)} style={{
                     background: 'rgba(255,61,90,.1)', border: '1px solid rgba(255,61,90,.3)',
                     borderRadius: 8, padding: '8px 10px', cursor: 'pointer', color: 'var(--red)'
                   }}>
@@ -427,10 +555,7 @@ export default function Admin({ usuario, onLogout }) {
             Gerencie o acesso de cada usuário.
           </p>
           {usuarios.length === 0 ? (
-            <div className="empty">
-              <div className="emoji">👥</div>
-              <h3>Nenhum usuário cadastrado</h3>
-            </div>
+            <div className="empty"><div className="emoji">👥</div><h3>Nenhum usuário cadastrado</h3></div>
           ) : (
             usuarios.map(u => (
               <div key={u.id} className="card" style={{ marginBottom: 10 }}>

@@ -23,7 +23,7 @@ export default function Login({ onLogin }) {
       .single()
 
     if (existente) {
-      // Usuário existente — usa dados do banco, ignora estab
+      // Sempre salva dados frescos do banco — ignora o que tinha no localStorage
       localStorage.setItem('usuario', JSON.stringify(existente))
       onLogin(existente)
     } else {
