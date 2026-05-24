@@ -93,6 +93,22 @@ function FormUsinagem({ usuario }) {
       return
     }
 
+    // Bloqueia se estab não bater
+    if (usuario?.estab && usuario.estab !== 'todas') {
+      const { data: ordemData } = await supabase
+        .from('ordens')
+        .select('estab')
+        .ilike('item_ccs', codigo)
+        .limit(1)
+        .single()
+
+      if (ordemData && ordemData.estab !== usuario.estab) {
+        const planta = ordemData.estab === '100' ? 'Limeira' : 'Palmeira'
+        showToast(`❌ Este item é de ${planta}! Você não tem acesso.`, 'var(--red)')
+        return
+      }
+    }
+
     setLoading(true)
     const { error } = await supabase.from('lancamentos').insert({
       codigo, quantidade: parseInt(quantidade),
@@ -111,6 +127,18 @@ function FormUsinagem({ usuario }) {
 
   return (
     <>
+      {usuario?.estab && usuario.estab !== 'todas' && (
+        <div style={{
+          background: usuario.estab === '100' ? 'rgba(0,229,255,.1)' : 'rgba(0,255,136,.1)',
+          border: `1px solid ${usuario.estab === '100' ? 'rgba(0,229,255,.3)' : 'rgba(0,255,136,.3)'}`,
+          borderRadius: 8, padding: '8px 14px', marginBottom: 12,
+          fontSize: 12, fontWeight: 700,
+          color: usuario.estab === '100' ? 'var(--accent)' : 'var(--green)'
+        }}>
+          📍 Estabelecimento: {usuario.estab === '100' ? 'Limeira' : 'Palmeira'}
+        </div>
+      )}
+
       <div className="card">
         <div className="card-title">Dados do item</div>
 
@@ -250,6 +278,19 @@ function PlanejarCorte({ usuario }) {
       .select('ordem, item_ccs, cliente, qtde_ordem, saldo, estab')
       .ilike('tarefa', `%${job}%`)
       .order('item_ccs')
+
+    // Bloqueia se estab não bater
+    if (usuario?.estab && usuario.estab !== 'todas' && data?.length > 0) {
+      const estabOrdem = data[0].estab
+      if (estabOrdem !== usuario.estab) {
+        const planta = estabOrdem === '100' ? 'Limeira' : 'Palmeira'
+        showToast(`❌ Este job é de ${planta}! Você não tem acesso.`, 'var(--red)')
+        setOrdens([])
+        setLoading(false)
+        return
+      }
+    }
+
     setOrdens(data || [])
     salvarMaquina(maquina)
     setLoading(false)
@@ -290,6 +331,18 @@ function PlanejarCorte({ usuario }) {
 
   return (
     <>
+      {usuario?.estab && usuario.estab !== 'todas' && (
+        <div style={{
+          background: usuario.estab === '100' ? 'rgba(0,229,255,.1)' : 'rgba(0,255,136,.1)',
+          border: `1px solid ${usuario.estab === '100' ? 'rgba(0,229,255,.3)' : 'rgba(0,255,136,.3)'}`,
+          borderRadius: 8, padding: '8px 14px', marginBottom: 12,
+          fontSize: 12, fontWeight: 700,
+          color: usuario.estab === '100' ? 'var(--accent)' : 'var(--green)'
+        }}>
+          📍 Estabelecimento: {usuario.estab === '100' ? 'Limeira' : 'Palmeira'}
+        </div>
+      )}
+
       <div className="card">
         <div className="card-title">📋 Planejar corte</div>
 
@@ -334,7 +387,6 @@ function PlanejarCorte({ usuario }) {
         <div className="card">
           <div className="card-title">Ordens do job {job}</div>
 
-          {/* Chapas e tipo AQUI em cima */}
           <div className="field">
             <label>Total de chapas do job</label>
             <input className="input" type="number" value={totalChapas}
@@ -368,7 +420,6 @@ function PlanejarCorte({ usuario }) {
 
           <div style={{ height: 1, background: 'var(--border)', margin: '8px 0 16px' }} />
 
-          {/* Lista de ordens */}
           {ordens.map((o, i) => (
             <div key={i} style={{
               padding: '10px 0', borderBottom: '1px solid var(--border)',
@@ -393,7 +444,6 @@ function PlanejarCorte({ usuario }) {
             </div>
           ))}
 
-          {/* Confirmar só aqui embaixo */}
           <button className="btn-primary" onClick={confirmar} disabled={salvando}
             style={{ background: 'var(--yellow)', color: '#000', marginTop: 16 }}>
             {salvando ? 'Salvando...' : '✅ Confirmar planejamento'}
@@ -431,6 +481,19 @@ function ApontarProducao({ usuario }) {
       .select('ordem, item_ccs, cliente, qtde_ordem, saldo, estab')
       .ilike('tarefa', `%${job}%`)
       .order('item_ccs')
+
+    // Bloqueia se estab não bater
+    if (usuario?.estab && usuario.estab !== 'todas' && ords?.length > 0) {
+      const estabOrdem = ords[0].estab
+      if (estabOrdem !== usuario.estab) {
+        const planta = estabOrdem === '100' ? 'Limeira' : 'Palmeira'
+        showToast(`❌ Este job é de ${planta}! Você não tem acesso.`, 'var(--red)')
+        setOrdens([])
+        setOrdensFiltradas([])
+        setLoading(false)
+        return
+      }
+    }
 
     const { data: plan } = await supabase
       .from('laser_planejamento')

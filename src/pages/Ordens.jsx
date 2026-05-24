@@ -84,7 +84,7 @@ function parseData(dataStr) {
   } catch { return new Date(0) }
 }
 
-export default function Ordens() {
+export default function Ordens({ usuario }) {
   const [query, setQuery] = useState('')
   const [tipoBusca, setTipoBusca] = useState('item')
   const [planta, setPlanta] = useState('todas')
@@ -160,6 +160,13 @@ export default function Ordens() {
   }
 
   async function abrirModal(r) {
+    // Bloqueia reporte de outro estabelecimento
+    if (usuario?.estab && usuario.estab !== 'todas' && r.estab !== usuario.estab) {
+      const planta = r.estab === '100' ? 'Limeira' : 'Palmeira'
+      showToast(`❌ Esta ordem é de ${planta}! Você não pode reportar.`, 'var(--red)')
+      return
+    }
+
     setModal(r)
     setDescricao('')
     setSelectedResp(null)
@@ -303,6 +310,7 @@ export default function Ordens() {
                     const dias = ap ? diasParado(ap.data_apontamento) : null
                     const cor = corParado(dias)
                     const texto = textoParado(dias)
+                    const podeInteragir = !usuario?.estab || usuario.estab === 'todas' || r.estab === usuario.estab
 
                     return (
                       <div key={i} style={{ padding: '12px 14px', borderTop: '1px solid var(--border)' }}>
@@ -316,6 +324,12 @@ export default function Ordens() {
                                   color: r.estab === '100' ? 'var(--accent)' : 'var(--green)',
                                   fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4
                                 }}>{r.estab === '100' ? 'Limeira' : 'Palmeira'}</span>
+                              )}
+                              {!podeInteragir && (
+                                <span style={{
+                                  background: 'rgba(107,114,128,.15)', color: 'var(--muted)',
+                                  fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4
+                                }}>🔒 Somente leitura</span>
                               )}
                             </div>
                             <div style={{ fontSize: 11, color: 'var(--muted)' }}>{r.item_ccs} · {r.cliente || '—'}</div>
@@ -341,13 +355,15 @@ export default function Ordens() {
                               }}>
                                 <ChevronRight size={12} /> Detalhar
                               </button>
-                              <button onClick={() => abrirModal(r)} style={{
-                                background: 'rgba(255,107,53,.15)', border: '1px solid rgba(255,107,53,.4)',
-                                borderRadius: 8, padding: '5px 8px', cursor: 'pointer',
-                                color: '#ff6b35', display: 'flex', alignItems: 'center'
-                              }}>
-                                <AlertTriangle size={12} />
-                              </button>
+                              {podeInteragir && (
+                                <button onClick={() => abrirModal(r)} style={{
+                                  background: 'rgba(255,107,53,.15)', border: '1px solid rgba(255,107,53,.4)',
+                                  borderRadius: 8, padding: '5px 8px', cursor: 'pointer',
+                                  color: '#ff6b35', display: 'flex', alignItems: 'center'
+                                }}>
+                                  <AlertTriangle size={12} />
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -361,11 +377,11 @@ export default function Ordens() {
         </>
       )}
 
-      {/* Modal detalhe — cronológico por primeiro apontamento */}
+      {/* Modal detalhe */}
       {detalhe && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', padding: 24, width: '100%', maxWidth: 480, maxHeight: '80vh', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>Roteiro de apontamentos</div>
                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>OP {detalhe.ordem} · {detalhe.item}</div>
@@ -375,6 +391,12 @@ export default function Ordens() {
               </button>
             </div>
 
+            {detalhe.roteiro && (
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 16, fontFamily: 'monospace' }}>
+                {detalhe.roteiro}
+              </div>
+            )}
+
             {loadingDetalhe ? (
               <div style={{ textAlign: 'center', padding: 20, color: 'var(--muted)' }}>Carregando...</div>
             ) : detalhe.apont.length === 0 ? (
@@ -383,28 +405,22 @@ export default function Ordens() {
                 <p>Nenhum apontamento encontrado</p>
               </div>
             ) : (() => {
-              // Agrupa por desc_operacao — usa primeiro apontamento pra ordenar
               const grupos = {}
               detalhe.apont.forEach(a => {
                 const chave = a.desc_operacao || nomeOp(a.operacao) || a.operacao || 'Outros'
                 if (!grupos[chave]) {
-                  grupos[chave] = {
-                    nome: chave,
-                    items: [],
-                    primeiraData: a.data_apontamento
-                  }
+                  grupos[chave] = { nome: chave, items: [], primeiraData: a.data_apontamento }
                 }
                 grupos[chave].items.push(a)
               })
 
-              // Ordena grupos pelo primeiro apontamento
               const gruposOrdenados = Object.values(grupos).sort((a, b) =>
                 parseData(a.primeiraData) - parseData(b.primeiraData)
               )
 
               let qtdAnterior = null
 
-              return gruposOrdenados.map((grupo, idx) => {
+              return gruposOrdenados.map((grupo) => {
                 const totalOK = grupo.items.reduce((s, a) => s + (a.qtd_aprov || 0), 0)
                 const totalRef = grupo.items.reduce((s, a) => s + (a.qtd_refug || 0), 0)
                 const ultimo = [...grupo.items].sort((a, b) =>
@@ -412,7 +428,6 @@ export default function Ordens() {
                 )[0]
                 const dias = diasParado(ultimo?.data_apontamento)
 
-                // Define ícone
                 let icone, corBorda
                 if (qtdAnterior !== null && totalOK < qtdAnterior) {
                   icone = '⚠️'; corBorda = 'var(--yellow)'
@@ -450,7 +465,7 @@ export default function Ordens() {
         </div>
       )}
 
-      {/* Modal reportar com autocomplete */}
+      {/* Modal reportar */}
       {modal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', padding: 24, width: '100%', maxWidth: 480, maxHeight: '80vh', overflowY: 'auto' }}>

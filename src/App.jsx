@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, NavLink, useNavigate, Navigate } from 'react-router-dom'
 import { ClipboardList, Search, Package, Lock, LogOut, Activity, Zap } from 'lucide-react'
 import Formulario from './pages/Formulario'
 import Consulta from './pages/Consulta'
@@ -37,14 +37,12 @@ function Manutencao({ onSenha }) {
         borderRadius: 16, display: 'flex', alignItems: 'center',
         justifyContent: 'center', fontSize: 26, marginBottom: 20
       }}>⚙️</div>
-
       <h1 style={{ fontFamily: 'monospace', fontSize: 22, color: 'var(--accent)', marginBottom: 6 }}>
         USINAGEM APP
       </h1>
       <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 32, textAlign: 'center' }}>
         Sistema em configuração — acesso restrito
       </p>
-
       <div style={{ width: '100%', maxWidth: 340 }}>
         <div className="card">
           <div className="field">
@@ -105,6 +103,7 @@ function Layout({ usuario, onLogout }) {
           <Route path="/sequor" element={<Sequor />} />
           <Route path="/laser" element={<Laser />} />
           <Route path="/admin" element={<Admin usuario={usuario} />} />
+          <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </main>
 
