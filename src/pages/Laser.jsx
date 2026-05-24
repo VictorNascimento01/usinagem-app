@@ -8,8 +8,15 @@ const PLANTAS = [
   { key: '200', label: '📍 Palmeira' },
 ]
 
+function nomeTurno(t) {
+  if (t === '1') return '1º Turno'
+  if (t === '2') return '2º Turno'
+  if (t === '3') return '3º Turno'
+  return t || '—'
+}
+
 export default function Laser() {
-  const [aba, setAba] = useState('planejamentos')
+  const [aba, setAba] = useState('sequencia')
   const [planta, setPlanta] = useState('todas')
 
   return (
@@ -18,7 +25,7 @@ export default function Laser() {
         <div className="page-icon"><Zap size={22} color="#000" /></div>
         <div>
           <h1>LASER</h1>
-          <p>Planejamentos e apontamentos</p>
+          <p>Planejamentos e sequência de corte</p>
         </div>
       </div>
 
@@ -38,23 +45,162 @@ export default function Laser() {
       {/* Abas */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         {[
-          { key: 'planejamentos', label: '📋 Planejamentos' },
+          { key: 'sequencia', label: '📋 Sequência' },
+          { key: 'planejamentos', label: '🗂️ Planejamentos' },
           { key: 'relatorio', label: '📊 Relatório' },
         ].map(({ key, label }) => (
           <button key={key} onClick={() => setAba(key)} style={{
-            flex: 1, padding: '10px 8px', border: '1px solid',
+            flex: 1, padding: '10px 4px', border: '1px solid',
             borderColor: aba === key ? 'var(--accent)' : 'var(--border)',
             background: aba === key ? 'rgba(0,229,255,.1)' : 'var(--surface)',
             color: aba === key ? 'var(--accent)' : 'var(--muted)',
-            borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer'
+            borderRadius: 10, fontWeight: 700, fontSize: 11, cursor: 'pointer'
           }}>{label}</button>
         ))}
       </div>
 
-      {aba === 'planejamentos'
-        ? <Planejamentos planta={planta} />
-        : <Relatorio planta={planta} />
-      }
+      {aba === 'sequencia' && <Sequencia planta={planta} />}
+      {aba === 'planejamentos' && <Planejamentos planta={planta} />}
+      {aba === 'relatorio' && <Relatorio planta={planta} />}
+    </div>
+  )
+}
+
+function Sequencia({ planta }) {
+  const [dados, setDados] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    carregarSequencia()
+  }, [planta])
+
+  async function carregarSequencia() {
+    setLoading(true)
+    let q = supabase
+      .from('laser_planejamento')
+      .select('*')
+      .order('turno', { ascending: true })
+      .order('criado_em', { ascending: true })
+
+    if (planta && planta !== 'todas') q = q.eq('estab', planta)
+
+    const { data } = await q
+    setDados(data || [])
+    setLoading(false)
+  }
+
+  // Agrupa por máquina
+  const porMaquina = {}
+  dados.forEach(p => {
+    const maq = p.maquina || '—'
+    if (!porMaquina[maq]) porMaquina[maq] = []
+    porMaquina[maq].push(p)
+  })
+
+  // Ordena máquinas por turno do primeiro job
+  const maquinasOrdenadas = Object.entries(porMaquina).sort((a, b) => {
+    const ta = a[1][0]?.turno || '9'
+    const tb = b[1][0]?.turno || '9'
+    return ta.localeCompare(tb)
+  })
+
+  function formatarHora(dataStr) {
+    if (!dataStr) return ''
+    return new Date(dataStr).toLocaleString('pt-BR', {
+      day: '2-digit', month: '2-digit',
+      hour: '2-digit', minute: '2-digit'
+    })
+  }
+
+  if (loading) return <div className="empty"><div className="emoji">⏳</div><p>Carregando...</p></div>
+
+  if (maquinasOrdenadas.length === 0) return (
+    <div className="empty">
+      <div className="emoji">⚡</div>
+      <h3>Nenhum planejamento</h3>
+      <p>Lance um corte no formulário Laser</p>
+    </div>
+  )
+
+  return (
+    <div>
+      {maquinasOrdenadas.map(([maquina, jobs]) => (
+        <div key={maquina} className="card" style={{ marginBottom: 14, padding: 0, overflow: 'hidden' }}>
+          {/* Header da máquina */}
+          <div style={{
+            background: 'var(--surface2)', padding: '12px 16px',
+            display: 'flex', alignItems: 'center', gap: 10
+          }}>
+            <div style={{
+              width: 10, height: 10, borderRadius: '50%',
+              background: 'var(--yellow)', flexShrink: 0
+            }} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontFamily: 'monospace', fontSize: 15, fontWeight: 700, color: 'var(--yellow)' }}>
+                {maquina.toUpperCase()}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                {jobs.length} job(s) planejado(s)
+              </div>
+            </div>
+            <div style={{
+              background: 'rgba(255,214,10,.15)', border: '1px solid rgba(255,214,10,.3)',
+              borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 700, color: 'var(--yellow)'
+            }}>
+              {nomeTurno(jobs[0]?.turno)}
+            </div>
+          </div>
+
+          {/* Lista de jobs em sequência */}
+          {jobs.map((job, idx) => (
+            <div key={job.id} style={{
+              padding: '12px 16px',
+              borderTop: '1px solid var(--border)',
+              display: 'flex', alignItems: 'center', gap: 12
+            }}>
+              {/* Número da sequência */}
+              <div style={{
+                width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                background: idx === 0 ? 'var(--accent)' : 'var(--surface2)',
+                border: `2px solid ${idx === 0 ? 'var(--accent)' : 'var(--border)'}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'monospace', fontSize: 13, fontWeight: 700,
+                color: idx === 0 ? '#000' : 'var(--muted)'
+              }}>
+                {idx + 1}
+              </div>
+
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                  <div style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700 }}>{job.job}</div>
+                  <span style={{
+                    background: job.tipo === 'parcial' ? 'rgba(255,107,53,.2)' : 'rgba(0,255,136,.2)',
+                    color: job.tipo === 'parcial' ? '#ff6b35' : 'var(--green)',
+                    fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4
+                  }}>
+                    {job.tipo === 'parcial' ? `⚡ ${job.chapas_cortar}/${job.total_chapas} chapas` : `✅ ${job.total_chapas} chapas`}
+                  </span>
+                  {job.estab && (
+                    <span style={{
+                      background: job.estab === '100' ? 'rgba(0,229,255,.15)' : 'rgba(0,255,136,.15)',
+                      color: job.estab === '100' ? 'var(--accent)' : 'var(--green)',
+                      fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4
+                    }}>{job.estab === '100' ? 'Limeira' : 'Palmeira'}</span>
+                  )}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                  👤 {job.usuario_nome} · {formatarHora(job.criado_em)}
+                </div>
+                {job.turno && job.turno !== jobs[0]?.turno && (
+                  <div style={{ fontSize: 11, color: 'var(--yellow)', marginTop: 2 }}>
+                    🕐 {nomeTurno(job.turno)}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      ))}
     </div>
   )
 }
@@ -68,14 +214,13 @@ function Planejamentos({ planta }) {
 
   useEffect(() => {
     carregarPlanejamentos()
-  }, [])
+  }, [planta])
 
   async function carregarPlanejamentos() {
     setLoading(true)
-    const { data } = await supabase
-      .from('laser_planejamento')
-      .select('*')
-      .order('criado_em', { ascending: false })
+    let q = supabase.from('laser_planejamento').select('*').order('criado_em', { ascending: false })
+    if (planta && planta !== 'todas') q = q.eq('estab', planta)
+    const { data } = await q
     setPlanejamentos(data || [])
     setLoading(false)
   }
@@ -100,53 +245,49 @@ function Planejamentos({ planta }) {
     })
   }
 
-  const filtrados = planta === 'todas'
-    ? planejamentos
-    : planejamentos.filter(p => p.estab === planta)
+  if (loading) return <div className="empty"><div className="emoji">⏳</div><p>Carregando...</p></div>
+
+  if (planejamentos.length === 0) return (
+    <div className="empty">
+      <div className="emoji">📋</div>
+      <h3>Nenhum planejamento</h3>
+      <p>Lance um corte no formulário Laser</p>
+    </div>
+  )
 
   return (
     <>
-      {loading ? (
-        <div className="empty"><div className="emoji">⏳</div><p>Carregando...</p></div>
-      ) : filtrados.length === 0 ? (
-        <div className="empty">
-          <div className="emoji">📋</div>
-          <h3>Nenhum planejamento</h3>
-          <p>Lance um corte no formulário Laser</p>
-        </div>
-      ) : (
-        filtrados.map(p => (
-          <div key={p.id} className="card" style={{ marginBottom: 10, cursor: 'pointer' }}
-            onClick={() => abrirDetalhe(p)}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <div style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700 }}>{p.job}</div>
+      {planejamentos.map(p => (
+        <div key={p.id} className="card" style={{ marginBottom: 10, cursor: 'pointer' }}
+          onClick={() => abrirDetalhe(p)}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <div style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700 }}>{p.job}</div>
+                <span style={{
+                  background: p.tipo === 'parcial' ? 'rgba(255,107,53,.2)' : 'rgba(0,255,136,.2)',
+                  color: p.tipo === 'parcial' ? '#ff6b35' : 'var(--green)',
+                  fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4
+                }}>{p.tipo === 'parcial' ? `⚡ Parcial ${p.chapas_cortar}/${p.total_chapas}` : '✅ Total'}</span>
+                {p.estab && (
                   <span style={{
-                    background: p.tipo === 'parcial' ? 'rgba(255,107,53,.2)' : 'rgba(0,255,136,.2)',
-                    color: p.tipo === 'parcial' ? '#ff6b35' : 'var(--green)',
+                    background: p.estab === '100' ? 'rgba(0,229,255,.15)' : 'rgba(0,255,136,.15)',
+                    color: p.estab === '100' ? 'var(--accent)' : 'var(--green)',
                     fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4
-                  }}>{p.tipo === 'parcial' ? `⚡ Parcial ${p.chapas_cortar}/${p.total_chapas}` : '✅ Total'}</span>
-                  {p.estab && (
-                    <span style={{
-                      background: p.estab === '100' ? 'rgba(0,229,255,.15)' : 'rgba(0,255,136,.15)',
-                      color: p.estab === '100' ? 'var(--accent)' : 'var(--green)',
-                      fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4
-                    }}>{p.estab === '100' ? 'Limeira' : 'Palmeira'}</span>
-                  )}
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                  🖨️ {p.maquina} · {p.total_chapas} chapa(s)
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                  👤 {p.usuario_nome} · {formatarData(p.criado_em)}
-                </div>
+                  }}>{p.estab === '100' ? 'Limeira' : 'Palmeira'}</span>
+                )}
               </div>
-              <div style={{ fontSize: 20, color: 'var(--muted)' }}>›</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                🖨️ {p.maquina} · {p.total_chapas} chapa(s) · {nomeTurno(p.turno)}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                👤 {p.usuario_nome} · {formatarData(p.criado_em)}
+              </div>
             </div>
+            <div style={{ fontSize: 20, color: 'var(--muted)' }}>›</div>
           </div>
-        ))
-      )}
+        </div>
+      ))}
 
       {/* Modal detalhe */}
       {detalhe && (
@@ -156,7 +297,7 @@ function Planejamentos({ planta }) {
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>Job {detalhe.job}</div>
                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                  {detalhe.maquina} · {detalhe.total_chapas} chapas ·
+                  {detalhe.maquina} · {detalhe.total_chapas} chapas · {nomeTurno(detalhe.turno)} ·
                   {detalhe.tipo === 'parcial' ? ` Parcial: ${detalhe.chapas_cortar} chapas` : ' Total'}
                 </div>
               </div>
@@ -224,7 +365,7 @@ function Relatorio({ planta }) {
 
   useEffect(() => {
     carregarApontamentos()
-  }, [])
+  }, [planta])
 
   async function carregarApontamentos() {
     setLoading(true)
@@ -238,15 +379,12 @@ function Relatorio({ planta }) {
 
   async function abrirDetalhe(job, itens, maquina, usuario, data) {
     setDetalhe({ job, itens, maquina, usuario, data })
-
-    // Busca apontamentos do SFCC por ordem
     const ordens = itens.map(i => i.ordem).filter(Boolean)
     const { data: sfcc } = await supabase
       .from('apontamentos_prod')
       .select('ordem, qtd_aprov, desc_operacao')
       .in('ordem', ordens)
 
-    // Soma por ordem
     const porOrdem = {}
     sfcc?.forEach(s => {
       if (!porOrdem[s.ordem]) porOrdem[s.ordem] = 0
@@ -271,131 +409,106 @@ function Relatorio({ planta }) {
 
   const jobs = Object.entries(porJob)
 
+  if (loading) return <div className="empty"><div className="emoji">⏳</div><p>Carregando...</p></div>
+
+  if (jobs.length === 0) return (
+    <div className="empty">
+      <div className="emoji">📊</div>
+      <h3>Nenhum apontamento</h3>
+      <p>Apontar produção no formulário Laser</p>
+    </div>
+  )
+
   return (
     <>
-      {loading ? (
-        <div className="empty"><div className="emoji">⏳</div><p>Carregando...</p></div>
-      ) : jobs.length === 0 ? (
-        <div className="empty">
-          <div className="emoji">📊</div>
-          <h3>Nenhum apontamento</h3>
-          <p>Apontar produção no formulário Laser</p>
-        </div>
-      ) : (
-        jobs.map(([job, itens]) => {
-          const maquina = itens[0]?.maquina || '—'
-          const usuario = itens[0]?.usuario_nome || '—'
-          const data = itens[0]?.criado_em
-          const isAberto = detalhe?.job === job
+      {jobs.map(([job, itens]) => {
+        const maquina = itens[0]?.maquina || '—'
+        const usuario = itens[0]?.usuario_nome || '—'
+        const data = itens[0]?.criado_em
+        const isAberto = detalhe?.job === job
 
-          return (
-            <div key={job} className="card" style={{ marginBottom: 10 }}>
-              {/* Header do job */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
-                onClick={() => isAberto ? setDetalhe(null) : abrirDetalhe(job, itens, maquina, usuario, data)}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{job}</div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>🖨️ {maquina} · {itens.length} item(s)</div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>👤 {usuario} · {formatarData(data)}</div>
-                </div>
-                <div style={{ fontSize: 20, color: 'var(--muted)' }}>{isAberto ? '▲' : '▼'}</div>
+        return (
+          <div key={job} className="card" style={{ marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
+              onClick={() => isAberto ? setDetalhe(null) : abrirDetalhe(job, itens, maquina, usuario, data)}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{job}</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>🖨️ {maquina} · {itens.length} item(s)</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>👤 {usuario} · {formatarData(data)}</div>
               </div>
-
-              {/* Detalhe expandido */}
-              {isAberto && (
-                <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
-                  {itens.map((a, i) => {
-                    const sfcc = sfccData[a.ordem] || 0
-                    const planejado = a.qtd_planejada || 0
-                    const apontado = a.qtd_real || 0
-                    const diffApp = apontado - planejado
-                    const diffSfcc = sfcc - planejado
-
-                    return (
-                      <div key={i} style={{
-                        marginBottom: 14, padding: '12px',
-                        background: 'var(--surface2)', borderRadius: 10
-                      }}>
-                        {/* Item */}
-                        <div style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
-                          {a.item_ccs}
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12 }}>
-                          OP {a.ordem}
-                        </div>
-
-                        {/* 3 indicadores */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                          {/* Planejado */}
-                          <div style={{
-                            background: 'rgba(107,114,128,.15)', borderRadius: 8,
-                            padding: '10px 8px', textAlign: 'center'
-                          }}>
-                            <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>📋 PLANEJADO</div>
-                            <div style={{ fontFamily: 'monospace', fontSize: 18, fontWeight: 700 }}>{planejado}</div>
-                            <div style={{ fontSize: 10, color: 'var(--muted)' }}>peças</div>
-                          </div>
-
-                          {/* Apontado no app */}
-                          <div style={{
-                            background: apontado >= planejado ? 'rgba(0,255,136,.1)' : 'rgba(255,61,90,.1)',
-                            border: `1px solid ${apontado >= planejado ? 'rgba(0,255,136,.3)' : 'rgba(255,61,90,.3)'}`,
-                            borderRadius: 8, padding: '10px 8px', textAlign: 'center'
-                          }}>
-                            <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>✅ NO APP</div>
-                            <div style={{
-                              fontFamily: 'monospace', fontSize: 18, fontWeight: 700,
-                              color: apontado >= planejado ? 'var(--green)' : 'var(--red)'
-                            }}>{apontado}</div>
-                            <div style={{
-                              fontSize: 10, fontWeight: 700,
-                              color: apontado >= planejado ? 'var(--green)' : 'var(--red)'
-                            }}>
-                              {diffApp >= 0 ? `+${diffApp}` : diffApp}
-                            </div>
-                          </div>
-
-                          {/* Apontado no sistema SFCC */}
-                          <div style={{
-                            background: sfcc >= planejado ? 'rgba(0,229,255,.1)' : 'rgba(255,214,10,.1)',
-                            border: `1px solid ${sfcc >= planejado ? 'rgba(0,229,255,.3)' : 'rgba(255,214,10,.3)'}`,
-                            borderRadius: 8, padding: '10px 8px', textAlign: 'center'
-                          }}>
-                            <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>🖥️ SISTEMA</div>
-                            <div style={{
-                              fontFamily: 'monospace', fontSize: 18, fontWeight: 700,
-                              color: sfcc >= planejado ? 'var(--accent)' : 'var(--yellow)'
-                            }}>{sfcc}</div>
-                            <div style={{
-                              fontSize: 10, fontWeight: 700,
-                              color: sfcc >= planejado ? 'var(--accent)' : 'var(--yellow)'
-                            }}>
-                              {diffSfcc >= 0 ? `+${diffSfcc}` : diffSfcc}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Alerta se divergência */}
-                        {apontado !== sfcc && (
-                          <div style={{
-                            marginTop: 10, background: 'rgba(255,214,10,.08)',
-                            border: '1px solid rgba(255,214,10,.3)',
-                            borderRadius: 8, padding: '6px 10px',
-                            fontSize: 12, color: 'var(--yellow)',
-                            display: 'flex', alignItems: 'center', gap: 6
-                          }}>
-                            ⚠️ Divergência: app apontou {apontado} pç mas sistema registrou {sfcc} pç
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
+              <div style={{ fontSize: 20, color: 'var(--muted)' }}>{isAberto ? '▲' : '▼'}</div>
             </div>
-          )
-        })
-      )}
+
+            {isAberto && (
+              <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+                {itens.map((a, i) => {
+                  const sfcc = sfccData[a.ordem] || 0
+                  const planejado = a.qtd_planejada || 0
+                  const apontado = a.qtd_real || 0
+                  const diffApp = apontado - planejado
+                  const diffSfcc = sfcc - planejado
+
+                  return (
+                    <div key={i} style={{
+                      marginBottom: 14, padding: '12px',
+                      background: 'var(--surface2)', borderRadius: 10
+                    }}>
+                      <div style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
+                        {a.item_ccs}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12 }}>OP {a.ordem}</div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                        <div style={{ background: 'rgba(107,114,128,.15)', borderRadius: 8, padding: '10px 8px', textAlign: 'center' }}>
+                          <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>📋 PLANEJADO</div>
+                          <div style={{ fontFamily: 'monospace', fontSize: 18, fontWeight: 700 }}>{planejado}</div>
+                          <div style={{ fontSize: 10, color: 'var(--muted)' }}>peças</div>
+                        </div>
+
+                        <div style={{
+                          background: apontado >= planejado ? 'rgba(0,255,136,.1)' : 'rgba(255,61,90,.1)',
+                          border: `1px solid ${apontado >= planejado ? 'rgba(0,255,136,.3)' : 'rgba(255,61,90,.3)'}`,
+                          borderRadius: 8, padding: '10px 8px', textAlign: 'center'
+                        }}>
+                          <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>✅ NO APP</div>
+                          <div style={{ fontFamily: 'monospace', fontSize: 18, fontWeight: 700, color: apontado >= planejado ? 'var(--green)' : 'var(--red)' }}>{apontado}</div>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: apontado >= planejado ? 'var(--green)' : 'var(--red)' }}>
+                            {diffApp >= 0 ? `+${diffApp}` : diffApp}
+                          </div>
+                        </div>
+
+                        <div style={{
+                          background: sfcc >= planejado ? 'rgba(0,229,255,.1)' : 'rgba(255,214,10,.1)',
+                          border: `1px solid ${sfcc >= planejado ? 'rgba(0,229,255,.3)' : 'rgba(255,214,10,.3)'}`,
+                          borderRadius: 8, padding: '10px 8px', textAlign: 'center'
+                        }}>
+                          <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>🖥️ SISTEMA</div>
+                          <div style={{ fontFamily: 'monospace', fontSize: 18, fontWeight: 700, color: sfcc >= planejado ? 'var(--accent)' : 'var(--yellow)' }}>{sfcc}</div>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: sfcc >= planejado ? 'var(--accent)' : 'var(--yellow)' }}>
+                            {diffSfcc >= 0 ? `+${diffSfcc}` : diffSfcc}
+                          </div>
+                        </div>
+                      </div>
+
+                      {apontado !== sfcc && (
+                        <div style={{
+                          marginTop: 10, background: 'rgba(255,214,10,.08)',
+                          border: '1px solid rgba(255,214,10,.3)',
+                          borderRadius: 8, padding: '6px 10px',
+                          fontSize: 12, color: 'var(--yellow)',
+                          display: 'flex', alignItems: 'center', gap: 6
+                        }}>
+                          ⚠️ Divergência: app {apontado} pç · sistema {sfcc} pç
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })}
     </>
   )
 }

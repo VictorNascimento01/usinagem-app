@@ -204,7 +204,6 @@ function Layout({ usuario, onLogout }) {
 
   return (
     <div className="app">
-      {/* Header */}
       <div style={{
         position: 'fixed', top: 0, left: '50%', transform: 'translateX(-50%)',
         width: '100%', maxWidth: 480, background: 'var(--surface)',
@@ -220,7 +219,6 @@ function Layout({ usuario, onLogout }) {
           <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{usuario.nome}</div>
         </div>
 
-        {/* Sininho */}
         <button onClick={() => { setChatModal(true); setChatAberto(null) }} style={{
           background: 'var(--surface2)', border: '1px solid var(--border)',
           borderRadius: 8, padding: '7px 10px', cursor: 'pointer',
@@ -269,7 +267,6 @@ function Layout({ usuario, onLogout }) {
         </Routes>
       </main>
 
-      {/* Botão feedback */}
       <button onClick={() => setFeedbackModal(true)} style={{
         position: 'fixed', bottom: 80, right: 16,
         width: 44, height: 44, borderRadius: '50%',
@@ -279,7 +276,6 @@ function Layout({ usuario, onLogout }) {
         display: 'flex', alignItems: 'center', justifyContent: 'center'
       }}>🐛</button>
 
-      {/* Modal Chat */}
       {chatModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480, maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
@@ -389,7 +385,6 @@ function Layout({ usuario, onLogout }) {
         </div>
       )}
 
-      {/* Modal feedback */}
       {feedbackModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', padding: 24, width: '100%', maxWidth: 480 }}>
@@ -440,7 +435,6 @@ function Layout({ usuario, onLogout }) {
         </div>
       )}
 
-      {/* Nav */}
       <nav className="bottom-nav">
         <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
           <Home size={22} />
