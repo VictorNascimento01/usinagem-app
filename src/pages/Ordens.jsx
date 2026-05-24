@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Package, AlertTriangle, X, ChevronRight } from 'lucide-react'
+import { Package, AlertTriangle, X, ChevronRight, Check } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import emailjs from '@emailjs/browser'
 
@@ -7,8 +7,8 @@ const EMAILJS_SERVICE = 'service_b110i99'
 const EMAILJS_TEMPLATE = 'template_1gm1y15'
 const EMAILJS_KEY = 'TrKMj1WLgqrejytoU'
 
-const ULTRAMSG_INSTANCE = 'instance177408'
-const ULTRAMSG_TOKEN = '7etqzwfh3gsrxzu0'
+const SUPABASE_URL = 'https://bsxfsiakvukhrivzylsp.supabase.co'
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzeGZzaWFrdnVraHJpdnp5bHNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzODkxODMsImV4cCI6MjA5NDk2NTE4M30.GycXQkAofWIp-bVcIZyBnKNSJmfjhitnyt4jYenpAkg'
 const VICTOR_WHATSAPP = '5519987556217'
 
 const PLANTAS = [
@@ -90,14 +90,13 @@ function parseData(dataStr) {
 
 async function enviarWhatsApp(numero, mensagem) {
   try {
-    await fetch(`https://api.ultramsg.com/${ULTRAMSG_INSTANCE}/messages/chat`, {
+    await fetch(`${SUPABASE_URL}/functions/v1/enviar-whatsapp`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        token: ULTRAMSG_TOKEN,
-        to: numero,
-        body: mensagem
-      })
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+      },
+      body: JSON.stringify({ numero, mensagem })
     })
   } catch (err) {
     console.error('Erro WhatsApp:', err)
@@ -117,7 +116,7 @@ export default function Ordens({ usuario }) {
   const [enviando, setEnviando] = useState(false)
   const [toast, setToast] = useState(null)
   const [responsaveis, setResponsaveis] = useState([])
-  const [selectedResp, setSelectedResp] = useState(null)
+  const [selectedResps, setSelectedResps] = useState([])
   const [buscaResp, setBuscaResp] = useState('')
   const [respFiltrados, setRespFiltrados] = useState([])
 
@@ -187,9 +186,8 @@ export default function Ordens({ usuario }) {
     }
     setModal(r)
     setDescricao('')
-    setSelectedResp(null)
+    setSelectedResps([])
     setBuscaResp('')
-    setRespFiltrados([])
     const { data } = await supabase
       .from('responsaveis')
       .select('*')
@@ -206,43 +204,72 @@ export default function Ordens({ usuario }) {
     setRespFiltrados(responsaveis.filter(r => r.nome.toLowerCase().includes(q)))
   }
 
+  function toggleResp(r) {
+    setSelectedResps(prev => {
+      const existe = prev.find(p => p.id === r.id)
+      if (existe) return prev.filter(p => p.id !== r.id)
+      return [...prev, r]
+    })
+  }
+
   async function reportar() {
     if (!descricao) { showToast('Descreva o problema!', 'var(--red)'); return }
-    if (!selectedResp) { showToast('Selecione o destinatário!', 'var(--red)'); return }
+    if (selectedResps.length === 0) { showToast('Selecione pelo menos um destinatário!', 'var(--red)'); return }
     setEnviando(true)
+
     try {
-      await supabase.from('apontamentos').insert({
-        ordem: modal.ordem, item: modal.item_ccs,
-        motivo: descricao, responsavel: selectedResp.nome,
-        responsavel_email: selectedResp.email
-      })
+      const msgWpp = `⚠️ *Novo reporte - CCS Tec*\n\n*Reportado por:* ${usuario?.nome || '—'}\n*OP:* ${modal.ordem}\n*Item:* ${modal.item_ccs}\n*Cliente:* ${modal.cliente || '—'}\n*Operação:* ${nomeOp(modal.prox_oper) || '—'}\n*Saldo:* ${modal.saldo} pç\n\n*Problema:* ${descricao}\n\n*Enviado para:* ${selectedResps.map(r => r.nome).join(', ')}\n*Horário:* ${new Date().toLocaleString('pt-BR')}`
 
-      await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
-        ordem: modal.ordem, item: modal.item_ccs,
-        cliente: modal.cliente || '—', operacao: modal.prox_oper || '—',
-        saldo: modal.saldo, descricao,
-        horario: new Date().toLocaleString('pt-BR'),
-        to_email: selectedResp.email
-      }, EMAILJS_KEY)
-
-      const { data: supervisores } = await supabase
-        .from('responsaveis').select('*').eq('auto_copia', true)
-      for (const sup of supervisores || []) {
-        await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
+      // Salva reporte e envia pra cada destinatário
+      for (const resp of selectedResps) {
+        await supabase.from('apontamentos').insert({
           ordem: modal.ordem, item: modal.item_ccs,
-          cliente: modal.cliente || '—', operacao: modal.prox_oper || '—',
-          saldo: modal.saldo, descricao,
-          horario: new Date().toLocaleString('pt-BR'),
-          to_email: sup.email
-        }, EMAILJS_KEY)
+          motivo: descricao, responsavel: resp.nome,
+          responsavel_email: resp.email
+        })
+
+        // Email
+        try {
+          await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
+            ordem: modal.ordem, item: modal.item_ccs,
+            cliente: modal.cliente || '—', operacao: modal.prox_oper || '—',
+            saldo: modal.saldo, descricao,
+            horario: new Date().toLocaleString('pt-BR'),
+            to_email: resp.email
+          }, EMAILJS_KEY)
+        } catch (e) { console.warn('Email falhou:', e) }
+
+        // WhatsApp
+        if (resp.telefone) {
+          await enviarWhatsApp(resp.telefone, msgWpp)
+        }
       }
 
-      // WhatsApp para Victor
-      const msgWpp = `⚠️ *Novo reporte - CCS Tec*\n\n*OP:* ${modal.ordem}\n*Item:* ${modal.item_ccs}\n*Cliente:* ${modal.cliente || '—'}\n*Operação:* ${nomeOp(modal.prox_oper) || '—'}\n*Saldo:* ${modal.saldo} pç\n\n*Problema:* ${descricao}\n\n*Enviado para:* ${selectedResp.nome}\n*Horário:* ${new Date().toLocaleString('pt-BR')}`
+      // Supervisores com auto_copia
+      const { data: supervisores } = await supabase
+        .from('responsaveis').select('*').eq('auto_copia', true)
+
+      for (const sup of supervisores || []) {
+        try {
+          await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
+            ordem: modal.ordem, item: modal.item_ccs,
+            cliente: modal.cliente || '—', operacao: modal.prox_oper || '—',
+            saldo: modal.saldo, descricao,
+            horario: new Date().toLocaleString('pt-BR'),
+            to_email: sup.email
+          }, EMAILJS_KEY)
+        } catch (e) { console.warn('Email sup falhou:', e) }
+
+        if (sup.telefone) {
+          await enviarWhatsApp(sup.telefone, msgWpp)
+        }
+      }
+
+      // WhatsApp Victor sempre
       await enviarWhatsApp(VICTOR_WHATSAPP, msgWpp)
 
       setModal(null); setDescricao('')
-      showToast(`✅ Enviado para ${selectedResp.nome.split(' ')[0]}!`)
+      showToast(`✅ Enviado para ${selectedResps.map(r => r.nome.split(' ')[0]).join(', ')}!`)
     } catch (err) {
       console.error(err)
       showToast('Erro ao enviar!', 'var(--red)')
@@ -488,10 +515,10 @@ export default function Ordens({ usuario }) {
         </div>
       )}
 
-      {/* Modal reportar */}
+      {/* Modal reportar — múltiplos destinatários */}
       {modal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200 }}>
-          <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', padding: 24, width: '100%', maxWidth: 480, maxHeight: '80vh', overflowY: 'auto' }}>
+          <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', padding: 24, width: '100%', maxWidth: 480, maxHeight: '85vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
               <AlertTriangle size={20} color="#ff6b35" />
               <div style={{ flex: 1 }}>
@@ -503,49 +530,69 @@ export default function Ordens({ usuario }) {
               </button>
             </div>
 
+            {/* Destinatários selecionados */}
+            {selectedResps.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                {selectedResps.map(r => (
+                  <div key={r.id} style={{
+                    background: 'rgba(0,229,255,.1)', border: '1px solid rgba(0,229,255,.3)',
+                    borderRadius: 20, padding: '4px 10px', fontSize: 12, fontWeight: 700,
+                    color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 6
+                  }}>
+                    {r.nome.split(' ')[0]}
+                    <button onClick={() => toggleResp(r)} style={{
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      color: 'var(--accent)', padding: 0, lineHeight: 1
+                    }}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Busca */}
             <div className="field">
-              <label>Enviar para</label>
-              <input className="input"
-                value={selectedResp ? selectedResp.nome : buscaResp}
-                onChange={e => { setSelectedResp(null); onBuscaResp(e.target.value) }}
-                placeholder="Digite o nome..."
-                style={{ marginBottom: 8 }}
-              />
-              {!selectedResp && buscaResp.length > 0 && respFiltrados.length > 0 && (
-                <div style={{
-                  background: 'var(--surface2)', border: '1px solid var(--accent)',
-                  borderRadius: 10, overflow: 'hidden', marginBottom: 8
-                }}>
-                  {respFiltrados.map(r => (
-                    <div key={r.id} onClick={() => { setSelectedResp(r); setBuscaResp('') }}
-                      style={{
-                        padding: '10px 14px', cursor: 'pointer',
-                        borderBottom: '1px solid var(--border)',
-                        display: 'flex', alignItems: 'center', gap: 10
-                      }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700 }}>{r.nome}</div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>{r.setor}</div>
+              <label>Enviar para <span style={{ fontSize: 11, color: 'var(--muted)' }}>(selecione um ou mais)</span></label>
+              <input className="input" value={buscaResp}
+                onChange={e => onBuscaResp(e.target.value)}
+                placeholder="Filtrar por nome..." />
+            </div>
+
+            {/* Lista de responsáveis */}
+            <div style={{
+              background: 'var(--surface2)', borderRadius: 10,
+              overflow: 'hidden', marginBottom: 14,
+              border: '1px solid var(--border)'
+            }}>
+              {respFiltrados.length === 0 ? (
+                <div style={{ padding: 14, fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>
+                  Nenhuma pessoa encontrada
+                </div>
+              ) : respFiltrados.map(r => {
+                const selecionado = selectedResps.some(p => p.id === r.id)
+                return (
+                  <div key={r.id} onClick={() => toggleResp(r)} style={{
+                    padding: '10px 14px', cursor: 'pointer',
+                    borderBottom: '1px solid var(--border)',
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    background: selecionado ? 'rgba(0,229,255,.08)' : 'transparent'
+                  }}>
+                    <div style={{
+                      width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+                      border: `2px solid ${selecionado ? 'var(--accent)' : 'var(--border)'}`,
+                      background: selecionado ? 'var(--accent)' : 'transparent',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}>
+                      {selecionado && <Check size={12} color="#000" />}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700 }}>{r.nome}</div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                        {r.setor} · {r.telefone ? '📱 WhatsApp' : '📧 Email'}
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-              {selectedResp && (
-                <div style={{
-                  background: 'rgba(0,229,255,.1)', border: '1px solid rgba(0,229,255,.3)',
-                  borderRadius: 8, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8
-                }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700 }}>{selectedResp.nome}</div>
-                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>{selectedResp.setor}</div>
                   </div>
-                  <button onClick={() => { setSelectedResp(null); setBuscaResp('') }}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}>
-                    <X size={14} />
-                  </button>
-                </div>
-              )}
+                )
+              })}
             </div>
 
             <div className="field">
@@ -556,7 +603,7 @@ export default function Ordens({ usuario }) {
             </div>
 
             <button className="btn-primary" onClick={reportar} disabled={enviando}>
-              {enviando ? 'Enviando...' : `⚠️ Enviar${selectedResp ? ' para ' + selectedResp.nome.split(' ')[0] : ''}`}
+              {enviando ? 'Enviando...' : `⚠️ Enviar${selectedResps.length > 0 ? ` para ${selectedResps.length} pessoa(s)` : ''}`}
             </button>
           </div>
         </div>

@@ -11,6 +11,13 @@ const SETORES = [
 
 const NIVEIS = ['operador', 'lider', 'supervisor', 'super']
 
+function formatarTelefone(tel) {
+  if (!tel) return null
+  const nums = tel.replace(/\D/g, '')
+  if (nums.startsWith('55') && nums.length >= 12) return nums
+  return '55' + nums
+}
+
 export default function Admin({ usuario }) {
   const [autenticado, setAutenticado] = useState(false)
   const [senha, setSenha] = useState('')
@@ -24,7 +31,7 @@ export default function Admin({ usuario }) {
   const [adicionando, setAdicionando] = useState(false)
   const [novaP, setNovaP] = useState({
     nome: '', email: '', estab: '200', nivel: 'operador',
-    setor: '', notificacao: false
+    setor: '', notificacao: false, telefone: ''
   })
 
   useEffect(() => {
@@ -106,14 +113,13 @@ export default function Admin({ usuario }) {
     }
     setAdicionando(true)
 
-    // Cadastra como usuário
+    const telFormatado = formatarTelefone(novaP.telefone)
+
     const { error: errUser } = await supabase.from('usuarios').upsert({
-      nome: novaP.nome,
-      email: novaP.email,
-      nivel: novaP.nivel,
-      estab: novaP.estab,
-      setor: novaP.setor,
-      ativo: true
+      nome: novaP.nome, email: novaP.email,
+      nivel: novaP.nivel, estab: novaP.estab,
+      setor: novaP.setor, ativo: true,
+      telefone: telFormatado
     }, { onConflict: 'email' })
 
     if (errUser) {
@@ -122,12 +128,10 @@ export default function Admin({ usuario }) {
       return
     }
 
-    // Cadastra como responsável (para receber reportes)
     const { error: errResp } = await supabase.from('responsaveis').upsert({
-      nome: novaP.nome,
-      email: novaP.email,
-      setor: novaP.setor,
-      auto_copia: novaP.notificacao
+      nome: novaP.nome, email: novaP.email,
+      setor: novaP.setor, auto_copia: novaP.notificacao,
+      telefone: telFormatado
     }, { onConflict: 'email' })
 
     if (errResp) {
@@ -137,15 +141,15 @@ export default function Admin({ usuario }) {
     }
 
     await carregarDados()
-    setNovaP({ nome: '', email: '', estab: '200', nivel: 'operador', setor: '', notificacao: false })
+    setNovaP({ nome: '', email: '', estab: '200', nivel: 'operador', setor: '', notificacao: false, telefone: '' })
     showToast('✅ Pessoa cadastrada com sucesso!')
     setAdicionando(false)
   }
 
-  async function removerResponsavel(id, email) {
+  async function removerResponsavel(id) {
     await supabase.from('responsaveis').delete().eq('id', id)
     setResponsaveis(prev => prev.filter(r => r.id !== id))
-    showToast('✅ Removido da lista de notificações!')
+    showToast('✅ Removido!')
   }
 
   async function toggleAutoCopia(r) {
@@ -288,7 +292,6 @@ export default function Admin({ usuario }) {
               <div>⚠️ <strong style={{ color: 'var(--text)' }}>Reportes</strong> — enviados ao responsável</div>
             </div>
           </div>
-
           <div className="card" style={{ marginTop: 12 }}>
             <div className="card-title">🗑️ Limpar dados</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -403,10 +406,9 @@ export default function Admin({ usuario }) {
         </div>
       )}
 
-      {/* Pessoas — cadastro unificado */}
+      {/* Pessoas */}
       {abaAtiva === 'responsaveis' && (
         <div>
-          {/* Formulário cadastro */}
           <div className="card" style={{ marginBottom: 16 }}>
             <div className="card-title">➕ Cadastrar pessoa</div>
 
@@ -422,6 +424,20 @@ export default function Admin({ usuario }) {
               <input className="input" type="email" value={novaP.email}
                 onChange={e => setNovaP(p => ({ ...p, email: e.target.value }))}
                 placeholder="Ex: joao@empresa.com" />
+            </div>
+
+            <div className="field">
+              <label>WhatsApp <span style={{ fontSize: 11, color: 'var(--muted)' }}>(opcional)</span></label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <div style={{
+                  background: 'var(--surface2)', border: '1px solid var(--border)',
+                  borderRadius: 10, padding: '12px 14px', fontSize: 13,
+                  color: 'var(--muted)', fontWeight: 700, whiteSpace: 'nowrap'
+                }}>🇧🇷 +55</div>
+                <input className="input" value={novaP.telefone}
+                  onChange={e => setNovaP(p => ({ ...p, telefone: e.target.value }))}
+                  placeholder="(DDD) 99999-9999" style={{ flex: 1 }} />
+              </div>
             </div>
 
             <div className="field">
@@ -475,8 +491,8 @@ export default function Admin({ usuario }) {
               <label>Notificações por email</label>
               <div style={{ display: 'flex', gap: 8 }}>
                 {[
-                  { key: false, label: '🔕 Não receber' },
-                  { key: true, label: '📧 Receber cópia automática' },
+                  { key: false, label: '🔕 Só quando escolhido' },
+                  { key: true, label: '📧 Cópia de todos' },
                 ].map(({ key, label }) => (
                   <button key={String(key)} onClick={() => setNovaP(p => ({ ...p, notificacao: key }))} style={{
                     flex: 1, padding: '9px 4px', border: '1px solid',
@@ -494,7 +510,6 @@ export default function Admin({ usuario }) {
             </button>
           </div>
 
-          {/* Lista de responsáveis */}
           <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
             Pessoas cadastradas ({responsaveis.length})
           </div>
@@ -511,6 +526,11 @@ export default function Admin({ usuario }) {
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 700, fontSize: 14 }}>{r.nome}</div>
                     <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{r.email}</div>
+                    {r.telefone && (
+                      <div style={{ fontSize: 11, color: 'var(--green)', marginTop: 2 }}>
+                        📱 {r.telefone}
+                      </div>
+                    )}
                     <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       <span style={{
                         background: 'rgba(0,229,255,.15)', color: 'var(--accent)',
@@ -530,12 +550,12 @@ export default function Admin({ usuario }) {
                           fontSize: 11, fontWeight: 700,
                           color: r.auto_copia ? 'var(--green)' : 'var(--muted)'
                         }}>
-                          {r.auto_copia ? '📧 Cópia auto ON' : '🔕 Cópia auto OFF'}
+                          {r.auto_copia ? '📧 Cópia de todos' : '🔕 Só quando escolhido'}
                         </span>
                       </div>
                     </div>
                   </div>
-                  <button onClick={() => removerResponsavel(r.id, r.email)} style={{
+                  <button onClick={() => removerResponsavel(r.id)} style={{
                     background: 'rgba(255,61,90,.1)', border: '1px solid rgba(255,61,90,.3)',
                     borderRadius: 8, padding: '8px 10px', cursor: 'pointer', color: 'var(--red)'
                   }}>
@@ -563,6 +583,9 @@ export default function Admin({ usuario }) {
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 700, fontSize: 14 }}>{u.nome}</div>
                     <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{u.email}</div>
+                    {u.telefone && (
+                      <div style={{ fontSize: 11, color: 'var(--green)', marginTop: 2 }}>📱 {u.telefone}</div>
+                    )}
                   </div>
                   {u.email !== usuario?.email && (
                     <button onClick={() => removerUsuario(u.id)} style={{
