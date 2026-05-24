@@ -13,7 +13,8 @@ export default function Equipe({ usuario }) {
   const [adicionando, setAdicionando] = useState(false)
   const [toast, setToast] = useState(null)
   const [nova, setNova] = useState({
-    nome: '', email: '', setor: '', notificacao: false
+    nome: '', email: '', setor: '', notificacao: false,
+    estab: usuario?.estab === 'todas' ? '200' : (usuario?.estab || '200')
   })
 
   useEffect(() => {
@@ -27,10 +28,31 @@ export default function Equipe({ usuario }) {
 
   async function carregarPessoas() {
     setLoading(true)
+
+    let niveisPermitidos = []
+    if (usuario?.nivel === 'lider') niveisPermitidos = ['operador']
+    if (usuario?.nivel === 'supervisor') niveisPermitidos = ['operador', 'lider']
+    if (usuario?.nivel === 'super') niveisPermitidos = ['operador', 'lider', 'supervisor']
+
+    const { data: users } = await supabase
+      .from('usuarios')
+      .select('email')
+      .in('nivel', niveisPermitidos)
+
+    const emails = users?.map(u => u.email) || []
+
+    if (emails.length === 0) {
+      setPessoas([])
+      setLoading(false)
+      return
+    }
+
     const { data } = await supabase
       .from('responsaveis')
       .select('*')
+      .in('email', emails)
       .order('nome')
+
     setPessoas(data || [])
     setLoading(false)
   }
@@ -42,17 +64,17 @@ export default function Equipe({ usuario }) {
     }
     setAdicionando(true)
 
-    // Cadastra como usuário com o mesmo estab do líder
+    const estabFinal = usuario?.estab === 'todas' ? nova.estab : (usuario?.estab || '200')
+
     await supabase.from('usuarios').upsert({
       nome: nova.nome,
       email: nova.email,
       nivel: 'operador',
-      estab: usuario?.estab || '200',
+      estab: estabFinal,
       setor: nova.setor,
       ativo: true
     }, { onConflict: 'email' })
 
-    // Cadastra como responsável
     const { data, error } = await supabase.from('responsaveis').upsert({
       nome: nova.nome,
       email: nova.email,
@@ -68,7 +90,10 @@ export default function Equipe({ usuario }) {
         if (existe) return prev.map(p => p.email === nova.email ? data : p)
         return [...prev, data]
       })
-      setNova({ nome: '', email: '', setor: '', notificacao: false })
+      setNova({
+        nome: '', email: '', setor: '', notificacao: false,
+        estab: usuario?.estab === 'todas' ? '200' : (usuario?.estab || '200')
+      })
       showToast('✅ Pessoa cadastrada!')
     }
     setAdicionando(false)
@@ -85,7 +110,7 @@ export default function Equipe({ usuario }) {
     const novo = !p.auto_copia
     await supabase.from('responsaveis').update({ auto_copia: novo }).eq('id', p.id)
     setPessoas(prev => prev.map(x => x.id === p.id ? { ...x, auto_copia: novo } : x))
-    showToast(novo ? '📧 Notificação ativada!' : '🔕 Notificação desativada!')
+    showToast(novo ? '📧 Cópia de todos ativada!' : '🔕 Só quando escolhido!')
   }
 
   return (
@@ -98,7 +123,6 @@ export default function Equipe({ usuario }) {
         </div>
       </div>
 
-      {/* Formulário */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-title">➕ Cadastrar pessoa</div>
 
@@ -125,12 +149,44 @@ export default function Equipe({ usuario }) {
           </select>
         </div>
 
+        {/* Mostra seleção de estab só pra quem tem acesso a todas as plantas */}
+        {usuario?.estab === 'todas' ? (
+          <div className="field">
+            <label>Estabelecimento</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[
+                { key: '100', label: '📍 Limeira' },
+                { key: '200', label: '📍 Palmeira' },
+                { key: 'todas', label: '🏭 Todas' },
+              ].map(({ key, label }) => (
+                <button key={key} onClick={() => setNova(p => ({ ...p, estab: key }))} style={{
+                  flex: 1, padding: '9px 4px', border: '1px solid',
+                  borderColor: nova.estab === key ? 'var(--accent)' : 'var(--border)',
+                  background: nova.estab === key ? 'rgba(0,229,255,.1)' : 'var(--surface2)',
+                  color: nova.estab === key ? 'var(--accent)' : 'var(--muted)',
+                  borderRadius: 8, fontWeight: 700, fontSize: 11, cursor: 'pointer'
+                }}>{label}</button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div style={{
+            background: usuario?.estab === '100' ? 'rgba(0,229,255,.08)' : 'rgba(0,255,136,.08)',
+            border: `1px solid ${usuario?.estab === '100' ? 'rgba(0,229,255,.2)' : 'rgba(0,255,136,.2)'}`,
+            borderRadius: 8, padding: '8px 12px', fontSize: 12,
+            color: usuario?.estab === '100' ? 'var(--accent)' : 'var(--green)',
+            marginBottom: 12
+          }}>
+            📍 Esta pessoa será cadastrada para: {usuario?.estab === '100' ? 'Limeira' : 'Palmeira'}
+          </div>
+        )}
+
         <div className="field">
           <label>Notificações por email</label>
           <div style={{ display: 'flex', gap: 8 }}>
             {[
-              { key: false, label: '🔕 Não receber' },
-              { key: true, label: '📧 Receber reportes' },
+              { key: false, label: '🔕 Só quando escolhido' },
+              { key: true, label: '📧 Cópia de todos' },
             ].map(({ key, label }) => (
               <button key={String(key)} onClick={() => setNova(p => ({ ...p, notificacao: key }))} style={{
                 flex: 1, padding: '9px 4px', border: '1px solid',
@@ -143,22 +199,11 @@ export default function Equipe({ usuario }) {
           </div>
         </div>
 
-        <div style={{
-          background: usuario?.estab === '100' ? 'rgba(0,229,255,.08)' : 'rgba(0,255,136,.08)',
-          border: `1px solid ${usuario?.estab === '100' ? 'rgba(0,229,255,.2)' : 'rgba(0,255,136,.2)'}`,
-          borderRadius: 8, padding: '8px 12px', fontSize: 12,
-          color: usuario?.estab === '100' ? 'var(--accent)' : 'var(--green)',
-          marginBottom: 12
-        }}>
-          📍 Esta pessoa será cadastrada para: {usuario?.estab === '100' ? 'Limeira' : usuario?.estab === '200' ? 'Palmeira' : 'Todas'}
-        </div>
-
         <button className="btn-primary" onClick={adicionarPessoa} disabled={adicionando}>
           {adicionando ? 'Cadastrando...' : '➕ Cadastrar'}
         </button>
       </div>
 
-      {/* Lista */}
       <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
         Pessoas cadastradas ({pessoas.length})
       </div>
@@ -197,7 +242,7 @@ export default function Equipe({ usuario }) {
                       fontSize: 11, fontWeight: 700,
                       color: p.auto_copia ? 'var(--green)' : 'var(--muted)'
                     }}>
-                      {p.auto_copia ? '📧 Notificação ON' : '🔕 Notificação OFF'}
+                      {p.auto_copia ? '📧 Cópia de todos' : '🔕 Só quando escolhido'}
                     </span>
                   </div>
                 </div>
