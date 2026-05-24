@@ -12,6 +12,7 @@ export default function Login({ onLogin }) {
   const [novaSenha, setNovaSenha] = useState('')
   const [confirmarSenha, setConfirmarSenha] = useState('')
   const [estab, setEstab] = useState('')
+  const [telefone, setTelefone] = useState('')
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState(null)
   const [usuarioEncontrado, setUsuarioEncontrado] = useState(null)
@@ -33,14 +34,11 @@ export default function Login({ onLogin }) {
       setUsuarioEncontrado(data)
       setNome(data.nome)
       if (data.senha) {
-        // Usuário com senha — vai pra etapa de senha
         setEtapa('senha')
       } else {
-        // Usuário sem senha — vai criar uma
         setEtapa('criar_senha')
       }
     } else {
-      // Usuário novo
       setEtapa('novo')
     }
   }
@@ -76,12 +74,15 @@ export default function Login({ onLogin }) {
     setLoading(true)
     setErro(null)
 
+    // Formata telefone
+    const telFormatado = telefone ? '55' + telefone.replace(/\D/g, '') : null
+
     await supabase
       .from('usuarios')
-      .update({ senha: novaSenha })
+      .update({ senha: novaSenha, telefone: telFormatado })
       .eq('id', usuarioEncontrado.id)
 
-    const atualizado = { ...usuarioEncontrado, senha: novaSenha }
+    const atualizado = { ...usuarioEncontrado, senha: novaSenha, telefone: telFormatado }
     localStorage.setItem('ultimo_email', atualizado.email)
     localStorage.setItem('ultimo_nome', atualizado.nome)
     localStorage.setItem('usuario', JSON.stringify(atualizado))
@@ -99,9 +100,11 @@ export default function Login({ onLogin }) {
     setLoading(true)
     setErro(null)
 
+    const telFormatado = telefone ? '55' + telefone.replace(/\D/g, '') : null
+
     const { data, error } = await supabase
       .from('usuarios')
-      .insert({ nome, email, nivel: 'operador', estab, senha: novaSenha })
+      .insert({ nome, email, nivel: 'operador', estab, senha: novaSenha, telefone: telFormatado })
       .select()
       .single()
 
@@ -128,6 +131,22 @@ export default function Login({ onLogin }) {
     setErro(null)
     setUsuarioEncontrado(null)
   }
+
+  const campoTelefone = (
+    <div className="field">
+      <label>WhatsApp <span style={{ fontSize: 11, color: 'var(--muted)' }}>(opcional — para receber reportes)</span></label>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{
+          background: 'var(--surface2)', border: '1px solid var(--border)',
+          borderRadius: 10, padding: '12px 14px', fontSize: 13,
+          color: 'var(--muted)', fontWeight: 700, whiteSpace: 'nowrap'
+        }}>🇧🇷 +55</div>
+        <input className="input" value={telefone}
+          onChange={e => setTelefone(e.target.value)}
+          placeholder="(DDD) 99999-9999" style={{ flex: 1 }} />
+      </div>
+    </div>
+  )
 
   return (
     <div style={{
@@ -175,7 +194,7 @@ export default function Login({ onLogin }) {
             </>
           )}
 
-          {/* Etapa 2 — Senha (usuário existente com senha) */}
+          {/* Etapa 2 — Senha */}
           {etapa === 'senha' && (
             <>
               <div style={{
@@ -221,7 +240,7 @@ export default function Login({ onLogin }) {
             </>
           )}
 
-          {/* Etapa 3 — Criar senha (usuário existente sem senha) */}
+          {/* Etapa 3 — Criar senha */}
           {etapa === 'criar_senha' && (
             <>
               <div className="card-title">Crie sua senha</div>
@@ -238,9 +257,9 @@ export default function Login({ onLogin }) {
                 <label>Confirmar senha</label>
                 <input className="input" type="password" value={confirmarSenha}
                   onChange={e => setConfirmarSenha(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && criarSenha()}
                   placeholder="Repita a senha" />
               </div>
+              {campoTelefone}
               {erro && (
                 <div style={{
                   background: 'rgba(255,61,90,.1)', border: '1px solid rgba(255,61,90,.3)',
@@ -272,7 +291,6 @@ export default function Login({ onLogin }) {
               <div className="field">
                 <label>Email</label>
                 <input className="input" type="email" value={email}
-                  onChange={e => setEmail(e.target.value)}
                   placeholder="Ex: joao@empresa.com" disabled />
               </div>
               <div className="field">
@@ -302,9 +320,9 @@ export default function Login({ onLogin }) {
                 <label>Confirmar senha</label>
                 <input className="input" type="password" value={confirmarSenha}
                   onChange={e => setConfirmarSenha(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && cadastrarNovo()}
                   placeholder="Repita a senha" />
               </div>
+              {campoTelefone}
               {erro && (
                 <div style={{
                   background: 'rgba(255,61,90,.1)', border: '1px solid rgba(255,61,90,.3)',

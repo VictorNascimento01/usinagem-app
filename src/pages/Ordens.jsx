@@ -7,6 +7,10 @@ const EMAILJS_SERVICE = 'service_b110i99'
 const EMAILJS_TEMPLATE = 'template_1gm1y15'
 const EMAILJS_KEY = 'TrKMj1WLgqrejytoU'
 
+const ULTRAMSG_INSTANCE = 'instance177408'
+const ULTRAMSG_TOKEN = '7etqzwfh3gsrxzu0'
+const VICTOR_WHATSAPP = '5519987556217'
+
 const PLANTAS = [
   { key: 'todas', label: '🏭 Todas' },
   { key: '100', label: '📍 Limeira' },
@@ -82,6 +86,22 @@ function parseData(dataStr) {
     const ano = partes[2].length === 2 ? '20' + partes[2] : partes[2]
     return new Date(`${ano}-${partes[1]}-${partes[0]}`)
   } catch { return new Date(0) }
+}
+
+async function enviarWhatsApp(numero, mensagem) {
+  try {
+    await fetch(`https://api.ultramsg.com/${ULTRAMSG_INSTANCE}/messages/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        token: ULTRAMSG_TOKEN,
+        to: numero,
+        body: mensagem
+      })
+    })
+  } catch (err) {
+    console.error('Erro WhatsApp:', err)
+  }
 }
 
 export default function Ordens({ usuario }) {
@@ -160,13 +180,11 @@ export default function Ordens({ usuario }) {
   }
 
   async function abrirModal(r) {
-    // Bloqueia reporte de outro estabelecimento
     if (usuario?.estab && usuario.estab !== 'todas' && r.estab !== usuario.estab) {
       const planta = r.estab === '100' ? 'Limeira' : 'Palmeira'
       showToast(`❌ Esta ordem é de ${planta}! Você não pode reportar.`, 'var(--red)')
       return
     }
-
     setModal(r)
     setDescricao('')
     setSelectedResp(null)
@@ -198,6 +216,7 @@ export default function Ordens({ usuario }) {
         motivo: descricao, responsavel: selectedResp.nome,
         responsavel_email: selectedResp.email
       })
+
       await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
         ordem: modal.ordem, item: modal.item_ccs,
         cliente: modal.cliente || '—', operacao: modal.prox_oper || '—',
@@ -217,6 +236,10 @@ export default function Ordens({ usuario }) {
           to_email: sup.email
         }, EMAILJS_KEY)
       }
+
+      // WhatsApp para Victor
+      const msgWpp = `⚠️ *Novo reporte - CCS Tec*\n\n*OP:* ${modal.ordem}\n*Item:* ${modal.item_ccs}\n*Cliente:* ${modal.cliente || '—'}\n*Operação:* ${nomeOp(modal.prox_oper) || '—'}\n*Saldo:* ${modal.saldo} pç\n\n*Problema:* ${descricao}\n\n*Enviado para:* ${selectedResp.nome}\n*Horário:* ${new Date().toLocaleString('pt-BR')}`
+      await enviarWhatsApp(VICTOR_WHATSAPP, msgWpp)
 
       setModal(null); setDescricao('')
       showToast(`✅ Enviado para ${selectedResp.nome.split(' ')[0]}!`)
