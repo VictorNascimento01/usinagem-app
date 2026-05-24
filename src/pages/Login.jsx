@@ -2,52 +2,131 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 export default function Login({ onLogin }) {
-  const [nome, setNome] = useState('')
-  const [email, setEmail] = useState('')
+  const emailSalvo = localStorage.getItem('ultimo_email')
+  const nomeSalvo = localStorage.getItem('ultimo_nome')
+
+  const [etapa, setEtapa] = useState(emailSalvo ? 'senha' : 'email')
+  const [email, setEmail] = useState(emailSalvo || '')
+  const [nome, setNome] = useState(nomeSalvo || '')
+  const [senha, setSenha] = useState('')
+  const [novaSenha, setNovaSenha] = useState('')
+  const [confirmarSenha, setConfirmarSenha] = useState('')
   const [estab, setEstab] = useState('')
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState(null)
+  const [usuarioEncontrado, setUsuarioEncontrado] = useState(null)
 
-  async function entrar() {
-    if (!nome || !email) {
-      setErro('Preencha nome e email!')
-      return
-    }
+  async function verificarEmail() {
+    if (!email) { setErro('Digite seu email!'); return }
     setLoading(true)
     setErro(null)
 
-    const { data: existente } = await supabase
+    const { data } = await supabase
       .from('usuarios')
       .select('*')
       .ilike('email', email)
       .single()
 
-    if (existente) {
-      // Sempre salva dados frescos do banco — ignora o que tinha no localStorage
-      localStorage.setItem('usuario', JSON.stringify(existente))
-      onLogin(existente)
-    } else {
-      // Usuário novo — precisa de estab
-      if (!estab) {
-        setErro('Selecione o estabelecimento!')
-        setLoading(false)
-        return
-      }
-      const { data, error } = await supabase
-        .from('usuarios')
-        .insert({ nome, email, nivel: 'operador', estab })
-        .select()
-        .single()
+    setLoading(false)
 
-      if (error) {
-        setErro('Erro ao cadastrar! Tente novamente.')
+    if (data) {
+      setUsuarioEncontrado(data)
+      setNome(data.nome)
+      if (data.senha) {
+        // Usuário com senha — vai pra etapa de senha
+        setEtapa('senha')
       } else {
-        localStorage.setItem('usuario', JSON.stringify(data))
-        onLogin(data)
+        // Usuário sem senha — vai criar uma
+        setEtapa('criar_senha')
       }
+    } else {
+      // Usuário novo
+      setEtapa('novo')
+    }
+  }
+
+  async function entrarComSenha() {
+    if (!senha) { setErro('Digite sua senha!'); return }
+    setLoading(true)
+    setErro(null)
+
+    const { data } = await supabase
+      .from('usuarios')
+      .select('*')
+      .ilike('email', emailSalvo || email)
+      .single()
+
+    if (!data || data.senha !== senha) {
+      setErro('Senha incorreta!')
+      setLoading(false)
+      return
     }
 
+    localStorage.setItem('ultimo_email', data.email)
+    localStorage.setItem('ultimo_nome', data.nome)
+    localStorage.setItem('usuario', JSON.stringify(data))
+    onLogin(data)
     setLoading(false)
+  }
+
+  async function criarSenha() {
+    if (!novaSenha) { setErro('Digite uma senha!'); return }
+    if (novaSenha !== confirmarSenha) { setErro('Senhas não conferem!'); return }
+    if (novaSenha.length < 4) { setErro('Senha muito curta! Mínimo 4 caracteres.'); return }
+    setLoading(true)
+    setErro(null)
+
+    await supabase
+      .from('usuarios')
+      .update({ senha: novaSenha })
+      .eq('id', usuarioEncontrado.id)
+
+    const atualizado = { ...usuarioEncontrado, senha: novaSenha }
+    localStorage.setItem('ultimo_email', atualizado.email)
+    localStorage.setItem('ultimo_nome', atualizado.nome)
+    localStorage.setItem('usuario', JSON.stringify(atualizado))
+    onLogin(atualizado)
+    setLoading(false)
+  }
+
+  async function cadastrarNovo() {
+    if (!nome || !email || !novaSenha || !estab) {
+      setErro('Preencha todos os campos!')
+      return
+    }
+    if (novaSenha !== confirmarSenha) { setErro('Senhas não conferem!'); return }
+    if (novaSenha.length < 4) { setErro('Senha muito curta! Mínimo 4 caracteres.'); return }
+    setLoading(true)
+    setErro(null)
+
+    const { data, error } = await supabase
+      .from('usuarios')
+      .insert({ nome, email, nivel: 'operador', estab, senha: novaSenha })
+      .select()
+      .single()
+
+    if (error) {
+      setErro('Erro ao cadastrar! Tente novamente.')
+      setLoading(false)
+      return
+    }
+
+    localStorage.setItem('ultimo_email', data.email)
+    localStorage.setItem('ultimo_nome', data.nome)
+    localStorage.setItem('usuario', JSON.stringify(data))
+    onLogin(data)
+    setLoading(false)
+  }
+
+  function trocarUsuario() {
+    localStorage.removeItem('ultimo_email')
+    localStorage.removeItem('ultimo_nome')
+    setEtapa('email')
+    setEmail('')
+    setNome('')
+    setSenha('')
+    setErro(null)
+    setUsuarioEncontrado(null)
   }
 
   return (
@@ -66,61 +145,184 @@ export default function Login({ onLogin }) {
         USINAGEM APP
       </h1>
       <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 32, textAlign: 'center' }}>
-        Identifique-se para continuar
+        {etapa === 'senha' ? `Olá, ${nome}! 👋` : 'Identifique-se para continuar'}
       </p>
 
       <div style={{ width: '100%', maxWidth: 380 }}>
         <div className="card">
-          <div className="card-title">Acesso</div>
 
-          <div className="field">
-            <label>Seu nome</label>
-            <input className="input" value={nome}
-              onChange={e => setNome(e.target.value)}
-              placeholder="Ex: João Silva" />
-          </div>
-
-          <div className="field">
-            <label>Seu email</label>
-            <input className="input" type="email" value={email}
-              onChange={e => setEmail(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && entrar()}
-              placeholder="Ex: joao@empresa.com" />
-          </div>
-
-          <div className="field">
-            <label>Estabelecimento <span style={{ fontSize: 11, color: 'var(--muted)' }}>(só para novos usuários)</span></label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {[
-                { key: '100', label: '📍 Limeira' },
-                { key: '200', label: '📍 Palmeira' },
-              ].map(({ key, label }) => (
-                <button key={key} onClick={() => setEstab(key)} style={{
-                  flex: 1, padding: '10px 6px', border: '1px solid',
-                  borderColor: estab === key ? 'var(--accent)' : 'var(--border)',
-                  background: estab === key ? 'rgba(0,229,255,.1)' : 'var(--surface2)',
-                  color: estab === key ? 'var(--accent)' : 'var(--muted)',
-                  borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer'
-                }}>{label}</button>
-              ))}
-            </div>
-          </div>
-
-          {erro && (
-            <div style={{
-              background: 'rgba(255,61,90,.1)', border: '1px solid rgba(255,61,90,.3)',
-              borderRadius: 8, padding: '8px 12px', fontSize: 13,
-              color: 'var(--red)', marginBottom: 12
-            }}>{erro}</div>
+          {/* Etapa 1 — Email */}
+          {etapa === 'email' && (
+            <>
+              <div className="card-title">Acesso</div>
+              <div className="field">
+                <label>Seu email</label>
+                <input className="input" type="email" value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && verificarEmail()}
+                  placeholder="Ex: joao@empresa.com" />
+              </div>
+              {erro && (
+                <div style={{
+                  background: 'rgba(255,61,90,.1)', border: '1px solid rgba(255,61,90,.3)',
+                  borderRadius: 8, padding: '8px 12px', fontSize: 13,
+                  color: 'var(--red)', marginBottom: 12
+                }}>{erro}</div>
+              )}
+              <button className="btn-primary" onClick={verificarEmail} disabled={loading}>
+                {loading ? 'Verificando...' : 'Continuar →'}
+              </button>
+            </>
           )}
 
-          <button className="btn-primary" onClick={entrar} disabled={loading}>
-            {loading ? 'Entrando...' : 'Entrar'}
-          </button>
-        </div>
+          {/* Etapa 2 — Senha (usuário existente com senha) */}
+          {etapa === 'senha' && (
+            <>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                marginBottom: 16, padding: '10px 12px',
+                background: 'var(--surface2)', borderRadius: 10
+              }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: '50%',
+                  background: 'linear-gradient(135deg, var(--accent), #0077ff)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 16, fontWeight: 700, color: '#000', flexShrink: 0
+                }}>
+                  {nome?.charAt(0)?.toUpperCase()}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>{nome}</div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>{emailSalvo || email}</div>
+                </div>
+                <button onClick={trocarUsuario} style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'var(--muted)', fontSize: 11, textDecoration: 'underline'
+                }}>Não sou eu</button>
+              </div>
 
-        <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--muted)', marginTop: 16 }}>
-          Usuários existentes entram automaticamente sem selecionar estabelecimento.
+              <div className="field">
+                <label>Senha</label>
+                <input className="input" type="password" value={senha}
+                  onChange={e => setSenha(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && entrarComSenha()}
+                  placeholder="Digite sua senha..." />
+              </div>
+              {erro && (
+                <div style={{
+                  background: 'rgba(255,61,90,.1)', border: '1px solid rgba(255,61,90,.3)',
+                  borderRadius: 8, padding: '8px 12px', fontSize: 13,
+                  color: 'var(--red)', marginBottom: 12
+                }}>{erro}</div>
+              )}
+              <button className="btn-primary" onClick={entrarComSenha} disabled={loading}>
+                {loading ? 'Entrando...' : '🔓 Entrar'}
+              </button>
+            </>
+          )}
+
+          {/* Etapa 3 — Criar senha (usuário existente sem senha) */}
+          {etapa === 'criar_senha' && (
+            <>
+              <div className="card-title">Crie sua senha</div>
+              <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>
+                Olá, {nome}! É a sua primeira vez entrando. Crie uma senha para os próximos acessos.
+              </p>
+              <div className="field">
+                <label>Nova senha</label>
+                <input className="input" type="password" value={novaSenha}
+                  onChange={e => setNovaSenha(e.target.value)}
+                  placeholder="Mínimo 4 caracteres" />
+              </div>
+              <div className="field">
+                <label>Confirmar senha</label>
+                <input className="input" type="password" value={confirmarSenha}
+                  onChange={e => setConfirmarSenha(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && criarSenha()}
+                  placeholder="Repita a senha" />
+              </div>
+              {erro && (
+                <div style={{
+                  background: 'rgba(255,61,90,.1)', border: '1px solid rgba(255,61,90,.3)',
+                  borderRadius: 8, padding: '8px 12px', fontSize: 13,
+                  color: 'var(--red)', marginBottom: 12
+                }}>{erro}</div>
+              )}
+              <button className="btn-primary" onClick={criarSenha} disabled={loading}>
+                {loading ? 'Salvando...' : '✅ Criar senha e entrar'}
+              </button>
+              <button onClick={trocarUsuario} style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--muted)', fontSize: 12, marginTop: 10,
+                textDecoration: 'underline', width: '100%', textAlign: 'center'
+              }}>← Voltar</button>
+            </>
+          )}
+
+          {/* Etapa 4 — Novo usuário */}
+          {etapa === 'novo' && (
+            <>
+              <div className="card-title">Novo cadastro</div>
+              <div className="field">
+                <label>Seu nome</label>
+                <input className="input" value={nome}
+                  onChange={e => setNome(e.target.value)}
+                  placeholder="Ex: João Silva" />
+              </div>
+              <div className="field">
+                <label>Email</label>
+                <input className="input" type="email" value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="Ex: joao@empresa.com" disabled />
+              </div>
+              <div className="field">
+                <label>Estabelecimento</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {[
+                    { key: '100', label: '📍 Limeira' },
+                    { key: '200', label: '📍 Palmeira' },
+                  ].map(({ key, label }) => (
+                    <button key={key} onClick={() => setEstab(key)} style={{
+                      flex: 1, padding: '10px 6px', border: '1px solid',
+                      borderColor: estab === key ? 'var(--accent)' : 'var(--border)',
+                      background: estab === key ? 'rgba(0,229,255,.1)' : 'var(--surface2)',
+                      color: estab === key ? 'var(--accent)' : 'var(--muted)',
+                      borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer'
+                    }}>{label}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="field">
+                <label>Crie uma senha</label>
+                <input className="input" type="password" value={novaSenha}
+                  onChange={e => setNovaSenha(e.target.value)}
+                  placeholder="Mínimo 4 caracteres" />
+              </div>
+              <div className="field">
+                <label>Confirmar senha</label>
+                <input className="input" type="password" value={confirmarSenha}
+                  onChange={e => setConfirmarSenha(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && cadastrarNovo()}
+                  placeholder="Repita a senha" />
+              </div>
+              {erro && (
+                <div style={{
+                  background: 'rgba(255,61,90,.1)', border: '1px solid rgba(255,61,90,.3)',
+                  borderRadius: 8, padding: '8px 12px', fontSize: 13,
+                  color: 'var(--red)', marginBottom: 12
+                }}>{erro}</div>
+              )}
+              <button className="btn-primary" onClick={cadastrarNovo} disabled={loading}>
+                {loading ? 'Cadastrando...' : '✅ Cadastrar e entrar'}
+              </button>
+              <button onClick={trocarUsuario} style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--muted)', fontSize: 12, marginTop: 10,
+                textDecoration: 'underline', width: '100%', textAlign: 'center'
+              }}>← Voltar</button>
+            </>
+          )}
+
         </div>
       </div>
     </div>
