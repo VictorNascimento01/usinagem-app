@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { BASE_ITENS } from '../lib/baseItens'
-import { Package, AlertTriangle, X, ChevronRight } from 'lucide-react'
+import { AlertTriangle, X, ChevronRight } from 'lucide-react'
 import emailjs from '@emailjs/browser'
 
 const EMAILJS_SERVICE = 'service_b110i99'
@@ -43,6 +43,31 @@ const OPERACOES = {
 
 function nomeOp(cod) { return OPERACOES[cod?.trim()] || cod }
 
+function detectarTurno() {
+  const agora = new Date()
+  const hora = agora.getHours()
+  const min = agora.getMinutes()
+  const diaSemana = agora.getDay()
+  const totalMin = hora * 60 + min
+  const t1inicio = 7 * 60
+  const t1fim = 16 * 60 + 48
+  const t3fimSexta = 10 * 60 + 9
+  const t3fimNormal = 7 * 60
+  if (totalMin >= t1inicio && totalMin < t1fim) return '1'
+  if (totalMin >= t1fim) return '2'
+  const ehSabado = diaSemana === 6
+  const fimT3 = ehSabado ? t3fimSexta : t3fimNormal
+  if (totalMin < fimT3) return '3'
+  return '1'
+}
+
+function nomeTurno(t) {
+  if (t === '1') return '1º Turno (07:00 - 16:48)'
+  if (t === '2') return '2º Turno (16:48 - 02:09)'
+  if (t === '3') return '3º Turno (02:09 - 07:00)'
+  return t
+}
+
 function diasParado(dataStr) {
   if (!dataStr) return null
   try {
@@ -78,8 +103,6 @@ async function enviarWhatsApp(numero, mensagem) {
 
 export default function Formulario({ usuario }) {
   const [tipo, setTipo] = useState('usinagem')
-
-  // Usa o estab do usuário como padrão
   const estabPadrao = usuario?.estab === 'todas' ? '' : (usuario?.estab || '')
   const [planta, setPlanta] = useState(estabPadrao)
 
@@ -97,12 +120,12 @@ export default function Formulario({ usuario }) {
         </div>
       </div>
 
-      {/* Seleção de planta — só mostra se tiver acesso a todas */}
       {usuario?.estab === 'todas' && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           {[
             { key: '100', label: '📍 Limeira' },
             { key: '200', label: '📍 Palmeira' },
+            { key: '', label: '🏭 Todas' },
           ].map(({ key, label }) => (
             <button key={key} onClick={() => setPlanta(key)} style={{
               flex: 1, padding: '9px 6px', border: '1px solid',
@@ -115,7 +138,6 @@ export default function Formulario({ usuario }) {
         </div>
       )}
 
-      {/* Badge planta para usuarios limitados */}
       {usuario?.estab !== 'todas' && (
         <div style={{
           background: usuario?.estab === '100' ? 'rgba(0,229,255,.1)' : 'rgba(0,255,136,.1)',
@@ -128,7 +150,6 @@ export default function Formulario({ usuario }) {
         </div>
       )}
 
-      {/* Seleção do tipo */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
         {[
           { key: 'usinagem', label: '⚙️ Usinagem' },
@@ -153,9 +174,10 @@ export default function Formulario({ usuario }) {
 }
 
 function FormUsinagem({ usuario, planta }) {
+  const isLiderOuMais = ['lider', 'supervisor', 'super'].includes(usuario?.nivel)
   const [codigo, setCodigo] = useState('')
   const [quantidade, setQuantidade] = useState('')
-  const [turno, setTurno] = useState('')
+  const [turno, setTurno] = useState(detectarTurno())
   const [obs, setObs] = useState('')
   const [sugestoes, setSugestoes] = useState([])
   const [loading, setLoading] = useState(false)
@@ -188,27 +210,14 @@ function FormUsinagem({ usuario, planta }) {
       showToast('Preencha todos os campos!', 'var(--red)')
       return
     }
+    const itemBlank = BASE_ITENS.find(i => i.codigo.toLowerCase() === codigo.toLowerCase() && i.tipo === 'blank')
+    if (itemBlank) { showToast(`⚠️ Código Blank! Use: ${itemBlank.codigoUsin}`, 'var(--red)'); return }
+    if (codigo.startsWith('7.')) { showToast(`⚠️ Código parece ser Blank!`, 'var(--red)'); return }
 
-    const itemBlank = BASE_ITENS.find(i =>
-      i.codigo.toLowerCase() === codigo.toLowerCase() && i.tipo === 'blank'
-    )
-    if (itemBlank) {
-      showToast(`⚠️ Código Blank! Use: ${itemBlank.codigoUsin}`, 'var(--red)')
-      return
-    }
-
-    if (codigo.startsWith('7.')) {
-      showToast(`⚠️ Código parece ser Blank (começa com 7.)`, 'var(--red)')
-      return
-    }
-
-    // Valida estab
     if (usuario?.estab && usuario.estab !== 'todas') {
-      const { data: ordemData } = await supabase
-        .from('ordens').select('estab').ilike('item_ccs', codigo).limit(1).single()
+      const { data: ordemData } = await supabase.from('ordens').select('estab').ilike('item_ccs', codigo).limit(1).single()
       if (ordemData && ordemData.estab !== usuario.estab) {
-        const p = ordemData.estab === '100' ? 'Limeira' : 'Palmeira'
-        showToast(`❌ Este item é de ${p}!`, 'var(--red)')
+        showToast(`❌ Este item é de ${ordemData.estab === '100' ? 'Limeira' : 'Palmeira'}!`, 'var(--red)')
         return
       }
     }
@@ -221,11 +230,11 @@ function FormUsinagem({ usuario, planta }) {
     })
     setLoading(false)
 
-    if (error) {
-      showToast('Erro ao lançar!', 'var(--red)')
-    } else {
+    if (error) { showToast('Erro ao lançar!', 'var(--red)') }
+    else {
       showToast('✅ Lançado com sucesso!')
-      setCodigo(''); setQuantidade(''); setTurno(''); setObs('')
+      setCodigo(''); setQuantidade(''); setObs('')
+      setTurno(detectarTurno())
     }
   }
 
@@ -248,10 +257,8 @@ function FormUsinagem({ usuario, planta }) {
             }}>
               {sugestoes.map((item, i) => (
                 <div key={i} onClick={() => selecionarItem(item)} style={{
-                  padding: '11px 15px', cursor: 'pointer',
-                  fontFamily: 'monospace', fontSize: 13,
-                  borderBottom: '1px solid var(--border)',
-                  display: 'flex', alignItems: 'center', gap: 8
+                  padding: '11px 15px', cursor: 'pointer', fontFamily: 'monospace', fontSize: 13,
+                  borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8
                 }}>
                   {item.codigo}
                   {item.tipo === 'blank' && (
@@ -266,21 +273,31 @@ function FormUsinagem({ usuario, planta }) {
           )}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div className="field">
-            <label>Quantidade</label>
-            <input className="input" type="number" value={quantidade}
-              onChange={e => setQuantidade(e.target.value)} placeholder="0" min="1" />
-          </div>
-          <div className="field">
-            <label>Turno</label>
+        <div className="field">
+          <label>Quantidade</label>
+          <input className="input" type="number" value={quantidade}
+            onChange={e => setQuantidade(e.target.value)} placeholder="0" min="1" />
+        </div>
+
+        <div className="field">
+          <label>Turno</label>
+          {isLiderOuMais ? (
             <select className="input" value={turno} onChange={e => setTurno(e.target.value)}>
-              <option value="">Selecione</option>
-              <option value="1">1º Turno</option>
-              <option value="2">2º Turno</option>
-              <option value="3">3º Turno</option>
+              <option value="1">1º Turno (07:00 - 16:48)</option>
+              <option value="2">2º Turno (16:48 - 02:09)</option>
+              <option value="3">3º Turno (02:09 - 07:00)</option>
             </select>
-          </div>
+          ) : (
+            <div style={{
+              background: 'var(--surface2)', border: '1px solid var(--border)',
+              borderRadius: 10, padding: '12px 14px', fontSize: 13,
+              color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 8
+            }}>
+              <span style={{ fontSize: 16 }}>🕐</span>
+              <span style={{ fontWeight: 700 }}>{nomeTurno(turno)}</span>
+              <span style={{ fontSize: 11, color: 'var(--green)', marginLeft: 'auto' }}>automático</span>
+            </div>
+          )}
         </div>
 
         <div className="field">
@@ -293,7 +310,6 @@ function FormUsinagem({ usuario, planta }) {
           {loading ? 'Lançando...' : '✓ Lançar item'}
         </button>
       </div>
-
       {toast && <div className="toast" style={{ background: toast.cor }}>{toast.msg}</div>}
     </>
   )
@@ -324,8 +340,10 @@ function FormLaser({ usuario, planta }) {
 }
 
 function PlanejarCorte({ usuario }) {
+  const isLiderOuMais = ['lider', 'supervisor', 'super'].includes(usuario?.nivel)
   const [maquina, setMaquina] = useState('')
   const [job, setJob] = useState('')
+  const [turno, setTurno] = useState(detectarTurno())
   const [ordens, setOrdens] = useState([])
   const [totalChapas, setTotalChapas] = useState('')
   const [tipoCort, setTipoCort] = useState('total')
@@ -367,8 +385,7 @@ function PlanejarCorte({ usuario }) {
     if (usuario?.estab && usuario.estab !== 'todas' && data?.length > 0) {
       const estabOrdem = data[0].estab
       if (estabOrdem !== usuario.estab) {
-        const p = estabOrdem === '100' ? 'Limeira' : 'Palmeira'
-        showToast(`❌ Este job é de ${p}!`, 'var(--red)')
+        showToast(`❌ Este job é de ${estabOrdem === '100' ? 'Limeira' : 'Palmeira'}!`, 'var(--red)')
         setLoading(false)
         return
       }
@@ -387,22 +404,21 @@ function PlanejarCorte({ usuario }) {
 
     setSalvando(true)
     const estab = ordens[0]?.estab || ''
-
     const { error } = await supabase.from('laser_planejamento').insert({
-      job, maquina,
+      job, maquina, turno,
       total_chapas: parseInt(totalChapas),
       tipo: tipoCort,
       chapas_cortar: tipoCort === 'parcial' ? parseInt(chapasParcial) : parseInt(totalChapas),
-      estab,
-      usuario_nome: usuario?.nome,
-      usuario_email: usuario?.email
+      estab, usuario_nome: usuario?.nome, usuario_email: usuario?.email
     })
 
     setSalvando(false)
     if (error) { showToast('Erro ao salvar!', 'var(--red)') }
     else {
       showToast('✅ Planejamento salvo!')
-      setJob(''); setTotalChapas(''); setChapasParcial(''); setTipoCort('total'); setOrdens([])
+      setJob(''); setTotalChapas(''); setChapasParcial('')
+      setTipoCort('total'); setOrdens([])
+      setTurno(detectarTurno())
     }
   }
 
@@ -442,6 +458,27 @@ function PlanejarCorte({ usuario }) {
             onChange={e => setJob(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && buscarOrdens()}
             placeholder="Ex: J092362" />
+        </div>
+
+        <div className="field">
+          <label>Turno</label>
+          {isLiderOuMais ? (
+            <select className="input" value={turno} onChange={e => setTurno(e.target.value)}>
+              <option value="1">1º Turno (07:00 - 16:48)</option>
+              <option value="2">2º Turno (16:48 - 02:09)</option>
+              <option value="3">3º Turno (02:09 - 07:00)</option>
+            </select>
+          ) : (
+            <div style={{
+              background: 'var(--surface2)', border: '1px solid var(--border)',
+              borderRadius: 10, padding: '12px 14px', fontSize: 13,
+              color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 8
+            }}>
+              <span style={{ fontSize: 16 }}>🕐</span>
+              <span style={{ fontWeight: 700 }}>{nomeTurno(turno)}</span>
+              <span style={{ fontSize: 11, color: 'var(--green)', marginLeft: 'auto' }}>automático</span>
+            </div>
+          )}
         </div>
 
         <button className="btn-primary" onClick={buscarOrdens} disabled={loading}
@@ -516,7 +553,6 @@ function PlanejarCorte({ usuario }) {
           </button>
         </div>
       )}
-
       {toast && <div className="toast" style={{ background: toast.cor }}>{toast.msg}</div>}
     </>
   )
@@ -551,8 +587,7 @@ function ApontarProducao({ usuario }) {
     if (usuario?.estab && usuario.estab !== 'todas' && ords?.length > 0) {
       const estabOrdem = ords[0].estab
       if (estabOrdem !== usuario.estab) {
-        const p = estabOrdem === '100' ? 'Limeira' : 'Palmeira'
-        showToast(`❌ Este job é de ${p}!`, 'var(--red)')
+        showToast(`❌ Este job é de ${estabOrdem === '100' ? 'Limeira' : 'Palmeira'}!`, 'var(--red)')
         setLoading(false)
         return
       }
@@ -635,6 +670,7 @@ function ApontarProducao({ usuario }) {
           <div style={{ fontWeight: 700, color: 'var(--yellow)', marginBottom: 4 }}>📋 Planejamento encontrado</div>
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>
             Máquina: {planejamento.maquina} · {planejamento.total_chapas} chapas ·
+            {planejamento.turno ? ` ${nomeTurno(planejamento.turno)} ·` : ''}
             {planejamento.tipo === 'parcial' ? ` Parcial: ${planejamento.chapas_cortar} chapas` : ' Total'}
           </div>
         </div>
@@ -677,7 +713,6 @@ function ApontarProducao({ usuario }) {
           </button>
         </>
       )}
-
       {toast && <div className="toast" style={{ background: toast.cor }}>{toast.msg}</div>}
     </>
   )
@@ -707,16 +742,12 @@ function FormOrdens({ usuario, planta }) {
   async function buscar() {
     if (!query) return
     setLoading(true)
-
     let q = supabase.from('ordens').select('*')
     if (tipoBusca === 'item') q = q.ilike('item_ccs', `%${query}%`)
     else if (tipoBusca === 'ordem') q = q.ilike('ordem', `%${query}%`)
     else if (tipoBusca === 'tarefa') q = q.ilike('tarefa', `%${query}%`)
-
-    // Filtra por planta
     const estabFiltro = usuario?.estab !== 'todas' ? usuario?.estab : planta
     if (estabFiltro) q = q.eq('estab', estabFiltro)
-
     const { data, error } = await q.order('saldo', { ascending: false })
     setLoading(false)
     if (error) { console.error(error); return }
@@ -729,12 +760,7 @@ function FormOrdens({ usuario, planta }) {
         .select('ordem, data_apontamento, operador, operacao, qtd_aprov')
         .in('ordem', ordens)
         .order('data_apontamento', { ascending: false })
-
-      if (apont) {
-        apont.forEach(a => {
-          if (!apontamentos[a.ordem]) apontamentos[a.ordem] = a
-        })
-      }
+      if (apont) apont.forEach(a => { if (!apontamentos[a.ordem]) apontamentos[a.ordem] = a })
     }
 
     const porOper = {}
@@ -743,7 +769,6 @@ function FormOrdens({ usuario, planta }) {
       if (!porOper[op]) porOper[op] = []
       porOper[op].push({ ...r, ultimoApont: apontamentos[r.ordem] || null })
     })
-
     setResultado({ found: data, porOper })
   }
 
@@ -751,11 +776,8 @@ function FormOrdens({ usuario, planta }) {
     setLoadingDetalhe(true)
     setDetalhe({ ordem: r.ordem, item: r.item_ccs, apont: [] })
     const { data } = await supabase
-      .from('apontamentos_prod')
-      .select('*')
-      .eq('ordem', r.ordem)
-      .order('data_apontamento', { ascending: true })
-      .limit(200)
+      .from('apontamentos_prod').select('*').eq('ordem', r.ordem)
+      .order('data_apontamento', { ascending: true }).limit(200)
     setDetalhe({ ordem: r.ordem, item: r.item_ccs, apont: data || [] })
     setLoadingDetalhe(false)
   }
@@ -765,13 +787,9 @@ function FormOrdens({ usuario, planta }) {
       showToast(`❌ Você não pode reportar esta ordem!`, 'var(--red)')
       return
     }
-    setModal(r)
-    setDescricao('')
-    setSelectedResps([])
-    setBuscaResp('')
+    setModal(r); setDescricao(''); setSelectedResps([]); setBuscaResp('')
     const { data } = await supabase.from('responsaveis').select('*').eq('auto_copia', false).order('nome')
-    setResponsaveis(data || [])
-    setRespFiltrados(data || [])
+    setResponsaveis(data || []); setRespFiltrados(data || [])
   }
 
   function onBuscaResp(val) {
@@ -792,10 +810,8 @@ function FormOrdens({ usuario, planta }) {
     if (!descricao) { showToast('Descreva o problema!', 'var(--red)'); return }
     if (selectedResps.length === 0) { showToast('Selecione pelo menos um destinatário!', 'var(--red)'); return }
     setEnviando(true)
-
     try {
       const msgWpp = `⚠️ *Novo reporte - CCS Tec*\n\n*Reportado por:* ${usuario?.nome}\n*OP:* ${modal.ordem}\n*Item:* ${modal.item_ccs}\n*Problema:* ${descricao}\n\n*Enviado para:* ${selectedResps.map(r => r.nome).join(', ')}\n*Horário:* ${new Date().toLocaleString('pt-BR')}`
-
       for (const resp of selectedResps) {
         await supabase.from('apontamentos').insert({
           ordem: modal.ordem, item: modal.item_ccs,
@@ -806,13 +822,11 @@ function FormOrdens({ usuario, planta }) {
             ordem: modal.ordem, item: modal.item_ccs,
             cliente: modal.cliente || '—', operacao: modal.prox_oper || '—',
             saldo: modal.saldo, descricao,
-            horario: new Date().toLocaleString('pt-BR'),
-            to_email: resp.email
+            horario: new Date().toLocaleString('pt-BR'), to_email: resp.email
           }, EMAILJS_KEY)
-        } catch (e) { console.warn('Email falhou:', e) }
+        } catch (e) { console.warn(e) }
         if (resp.telefone) await enviarWhatsApp(resp.telefone, msgWpp)
       }
-
       const { data: supervisores } = await supabase.from('responsaveis').select('*').eq('auto_copia', true)
       for (const sup of supervisores || []) {
         try {
@@ -820,13 +834,11 @@ function FormOrdens({ usuario, planta }) {
             ordem: modal.ordem, item: modal.item_ccs,
             cliente: modal.cliente || '—', operacao: modal.prox_oper || '—',
             saldo: modal.saldo, descricao,
-            horario: new Date().toLocaleString('pt-BR'),
-            to_email: sup.email
+            horario: new Date().toLocaleString('pt-BR'), to_email: sup.email
           }, EMAILJS_KEY)
-        } catch (e) { console.warn('Email sup falhou:', e) }
+        } catch (e) { console.warn(e) }
         if (sup.telefone) await enviarWhatsApp(sup.telefone, msgWpp)
       }
-
       await enviarWhatsApp(VICTOR_WHATSAPP, msgWpp)
       setModal(null)
       showToast(`✅ Enviado para ${selectedResps.map(r => r.nome.split(' ')[0]).join(', ')}!`)
@@ -888,9 +900,7 @@ function FormOrdens({ usuario, planta }) {
                 <div key={op} className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 12 }}>
                   <div style={{ background: 'var(--surface2)', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--yellow)', flexShrink: 0 }} />
-                    <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 13, color: 'var(--yellow)', flex: 1 }}>
-                      {nomeOp(op)}
-                    </div>
+                    <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 13, color: 'var(--yellow)', flex: 1 }}>{nomeOp(op)}</div>
                     <div style={{ fontSize: 12, color: 'var(--muted)' }}>{rows.length} ordem(s)</div>
                   </div>
 
@@ -951,7 +961,6 @@ function FormOrdens({ usuario, planta }) {
         </>
       )}
 
-      {/* Modal detalhe */}
       {detalhe && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', padding: 24, width: '100%', maxWidth: 480, maxHeight: '80vh', overflowY: 'auto' }}>
@@ -979,21 +988,16 @@ function FormOrdens({ usuario, planta }) {
                 if (!grupos[chave]) grupos[chave] = { nome: chave, items: [], primeiraData: a.data_apontamento }
                 grupos[chave].items.push(a)
               })
-
-              const gruposOrdenados = Object.values(grupos).sort((a, b) =>
-                parseData(a.primeiraData) - parseData(b.primeiraData)
-              )
-
+              const gruposOrdenados = Object.values(grupos).sort((a, b) => parseData(a.primeiraData) - parseData(b.primeiraData))
               let qtdAnterior = null
               return gruposOrdenados.map((grupo) => {
                 const totalOK = grupo.items.reduce((s, a) => s + (a.qtd_aprov || 0), 0)
                 const totalRef = grupo.items.reduce((s, a) => s + (a.qtd_refug || 0), 0)
                 const ultimo = [...grupo.items].sort((a, b) => parseData(b.data_apontamento) - parseData(a.data_apontamento))[0]
                 const dias = diasParado(ultimo?.data_apontamento)
-                let icone = qtdAnterior !== null && totalOK < qtdAnterior ? '⚠️' : '✅'
-                let corBorda = qtdAnterior !== null && totalOK < qtdAnterior ? 'var(--yellow)' : 'var(--green)'
+                const icone = qtdAnterior !== null && totalOK < qtdAnterior ? '⚠️' : '✅'
+                const corBorda = qtdAnterior !== null && totalOK < qtdAnterior ? 'var(--yellow)' : 'var(--green)'
                 qtdAnterior = totalOK
-
                 return (
                   <div key={grupo.nome} style={{ marginBottom: 10 }}>
                     <div style={{
@@ -1022,7 +1026,6 @@ function FormOrdens({ usuario, planta }) {
         </div>
       )}
 
-      {/* Modal reportar */}
       {modal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', padding: 24, width: '100%', maxWidth: 480, maxHeight: '85vh', overflowY: 'auto' }}>
