@@ -1,44 +1,158 @@
 import { useState, useEffect } from 'react'
-import { ClipboardList } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { BASE_ITENS } from '../lib/baseItens'
+import { Package, AlertTriangle, X, ChevronRight } from 'lucide-react'
+import emailjs from '@emailjs/browser'
+
+const EMAILJS_SERVICE = 'service_b110i99'
+const EMAILJS_TEMPLATE = 'template_1gm1y15'
+const EMAILJS_KEY = 'TrKMj1WLgqrejytoU'
+const SUPABASE_URL = 'https://bsxfsiakvukhrivzylsp.supabase.co'
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzeGZzaWFrdnVraHJpdnp5bHNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzODkxODMsImV4cCI6MjA5NDk2NTE4M30.GycXQkAofWIp-bVcIZyBnKNSJmfjhitnyt4jYenpAkg'
+const VICTOR_WHATSAPP = '5519987556217'
+
+const OPERACOES = {
+  '2AC': 'ACABAMENTO', '2AP': 'APONTAMENTO FINAL', '2BN': 'BNF',
+  '2CA': 'CALANDRA', '2CH': 'CHANFRADEIRA', '2DO': 'DOBRADEIRA',
+  '2EN': 'ENDIREITADEIRA', '2FO': 'FOSFATO', '2FR': 'FRESA',
+  '2FU': 'FURADEIRA', '2IN': 'INSPEÇÃO FINAL', '2JA': 'JATEAMENTO',
+  '2LA': 'LASER', '2LI': 'LIXADEIRA', '2MA': 'MANDRILHADORA',
+  '2ME': 'METROLOGIA', '2MI': 'SOLDA MIG', '2MO': 'MONTAGEM',
+  '2OL': 'DECAPAGEM', '2PA': 'PAGAMENTO', '2PI': 'PINTURA',
+  '2PL': 'PLASMA', '2PO': 'PORTAL', '2PR': 'PROGRAMAÇÃO',
+  '2RE': 'SOLDA RESISTÊNCIA', '2RO': 'SOLDA ROBÔ', '2SE': 'SERRA',
+  '2TO': 'TORNO', '2US': 'USINAGEM',
+  '300': 'PROGRAMAÇÃO', '3AP': 'APONTAMENTO FINAL', '3CU': 'CORTE',
+  '3EN': 'ENDIREITADEIRA', '3FU': 'FURADEIRA', '3GE': 'GERENCIAMENTO',
+  '3IN': 'INSPEÇÃO FINAL', '3LI': 'LIXADEIRA', '3MI': 'SOLDA MIG',
+  '3PA': 'PAGAMENTO', '3PR': 'PROGRAMAÇÃO', '3SE': 'SERRA',
+  'ACA': 'ACABAMENTO', 'APT': 'APONTAMENTO FINAL', 'BNF': 'BNF',
+  'CAL': 'CALANDRA', 'CHA': 'CHANFRADEIRA', 'DEC': 'DECAPAGEM',
+  'DOB': 'DOBRADEIRA', 'EMB': 'EMBARQUE CONTROLADO', 'END': 'ENDIREITADEIRA',
+  'FOS': 'FOSFATO', 'FRE': 'FRESA', 'FUR': 'FURADEIRA',
+  'INS': 'INSPEÇÃO FINAL', 'JAT': 'JATEAMENTO DE CHAPA', 'LAS': 'LASER',
+  'LIX': 'LIXADEIRA', 'MAN': 'MANDRILHADORA', 'MET': 'METROLOGIA',
+  'MIG': 'SOLDA MIG', 'MON': 'MONTAGEM', 'OLE': 'DECAPAGEM',
+  'OXI': 'OXICORTE', 'PAG': 'PAGAMENTO', 'PIN': 'PINTURA',
+  'PIS': 'GRAVAÇÃO', 'PLA': 'PLASMA', 'POR': 'PORTAL',
+  'PRE': 'PRENSA', 'PRO': 'PROGRAMAÇÃO', 'PUN': 'PUNCIONADEIRA',
+  'RES': 'SOLDA RESISTÊNCIA', 'ROB': 'SOLDA ROBÔ', 'ROS': 'ROSQUEADEIRA',
+  'SER': 'SERRA', 'SOL': 'SOLDA', 'TIG': 'SOLDA TIG',
+  'TOR': 'TORNO', 'USI': 'USINAGEM',
+}
+
+function nomeOp(cod) { return OPERACOES[cod?.trim()] || cod }
+
+function diasParado(dataStr) {
+  if (!dataStr) return null
+  try {
+    const partes = dataStr.split('/')
+    if (partes.length !== 3) return null
+    const ano = partes[2].length === 2 ? '20' + partes[2] : partes[2]
+    const data = new Date(`${ano}-${partes[1]}-${partes[0]}`)
+    const hoje = new Date()
+    hoje.setHours(0, 0, 0, 0)
+    return Math.floor((hoje - data) / (1000 * 60 * 60 * 24))
+  } catch { return null }
+}
+
+function parseData(dataStr) {
+  if (!dataStr) return new Date(0)
+  try {
+    const partes = dataStr.split('/')
+    if (partes.length !== 3) return new Date(0)
+    const ano = partes[2].length === 2 ? '20' + partes[2] : partes[2]
+    return new Date(`${ano}-${partes[1]}-${partes[0]}`)
+  } catch { return new Date(0) }
+}
+
+async function enviarWhatsApp(numero, mensagem) {
+  try {
+    await fetch(`${SUPABASE_URL}/functions/v1/enviar-whatsapp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+      body: JSON.stringify({ numero, mensagem })
+    })
+  } catch (err) { console.error('Erro WhatsApp:', err) }
+}
 
 export default function Formulario({ usuario }) {
   const [tipo, setTipo] = useState('usinagem')
 
+  // Usa o estab do usuário como padrão
+  const estabPadrao = usuario?.estab === 'todas' ? '' : (usuario?.estab || '')
+  const [planta, setPlanta] = useState(estabPadrao)
+
   return (
     <div>
       <div className="page-header">
-        <div className="page-icon">
-          <ClipboardList size={22} color="#000" />
+        <div className="page-icon" style={{ background: 'linear-gradient(135deg, var(--accent), #0077ff)' }}>
+          <span style={{ fontSize: 20 }}>
+            {tipo === 'usinagem' ? '⚙️' : tipo === 'laser' ? '⚡' : '📦'}
+          </span>
         </div>
         <div>
-          <h1>LANÇAMENTO</h1>
-          <p>Registrar item em produção</p>
+          <h1>INÍCIO</h1>
+          <p>Lançamentos e consulta de ordens</p>
         </div>
       </div>
 
+      {/* Seleção de planta — só mostra se tiver acesso a todas */}
+      {usuario?.estab === 'todas' && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          {[
+            { key: '100', label: '📍 Limeira' },
+            { key: '200', label: '📍 Palmeira' },
+          ].map(({ key, label }) => (
+            <button key={key} onClick={() => setPlanta(key)} style={{
+              flex: 1, padding: '9px 6px', border: '1px solid',
+              borderColor: planta === key ? 'var(--accent)' : 'var(--border)',
+              background: planta === key ? 'rgba(0,229,255,.1)' : 'var(--surface)',
+              color: planta === key ? 'var(--accent)' : 'var(--muted)',
+              borderRadius: 10, fontWeight: 700, fontSize: 12, cursor: 'pointer'
+            }}>{label}</button>
+          ))}
+        </div>
+      )}
+
+      {/* Badge planta para usuarios limitados */}
+      {usuario?.estab !== 'todas' && (
+        <div style={{
+          background: usuario?.estab === '100' ? 'rgba(0,229,255,.1)' : 'rgba(0,255,136,.1)',
+          border: `1px solid ${usuario?.estab === '100' ? 'rgba(0,229,255,.3)' : 'rgba(0,255,136,.3)'}`,
+          borderRadius: 8, padding: '8px 14px', marginBottom: 12,
+          fontSize: 12, fontWeight: 700,
+          color: usuario?.estab === '100' ? 'var(--accent)' : 'var(--green)'
+        }}>
+          📍 {usuario?.estab === '100' ? 'Limeira' : 'Palmeira'}
+        </div>
+      )}
+
+      {/* Seleção do tipo */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
         {[
           { key: 'usinagem', label: '⚙️ Usinagem' },
           { key: 'laser', label: '⚡ Laser' },
+          { key: 'ordens', label: '📦 Ordens' },
         ].map(({ key, label }) => (
           <button key={key} onClick={() => setTipo(key)} style={{
-            flex: 1, padding: '12px 8px', border: '1px solid',
+            flex: 1, padding: '10px 4px', border: '1px solid',
             borderColor: tipo === key ? 'var(--accent)' : 'var(--border)',
             background: tipo === key ? 'rgba(0,229,255,.1)' : 'var(--surface)',
             color: tipo === key ? 'var(--accent)' : 'var(--muted)',
-            borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer'
+            borderRadius: 10, fontWeight: 700, fontSize: 12, cursor: 'pointer'
           }}>{label}</button>
         ))}
       </div>
 
-      {tipo === 'usinagem' ? <FormUsinagem usuario={usuario} /> : <FormLaser usuario={usuario} />}
+      {tipo === 'usinagem' && <FormUsinagem usuario={usuario} planta={planta} />}
+      {tipo === 'laser' && <FormLaser usuario={usuario} planta={planta} />}
+      {tipo === 'ordens' && <FormOrdens usuario={usuario} planta={planta} />}
     </div>
   )
 }
 
-function FormUsinagem({ usuario }) {
+function FormUsinagem({ usuario, planta }) {
   const [codigo, setCodigo] = useState('')
   const [quantidade, setQuantidade] = useState('')
   const [turno, setTurno] = useState('')
@@ -84,27 +198,17 @@ function FormUsinagem({ usuario }) {
     }
 
     if (codigo.startsWith('7.')) {
-      const deParaBlank = BASE_ITENS.find(i => i.tipo === 'blank' && i.codigo.toLowerCase() === codigo.toLowerCase())
-      if (deParaBlank) {
-        showToast(`⚠️ Blank! Use: ${deParaBlank.codigoUsin}`, 'var(--red)')
-      } else {
-        showToast(`⚠️ Código parece ser Blank (começa com 7.)`, 'var(--red)')
-      }
+      showToast(`⚠️ Código parece ser Blank (começa com 7.)`, 'var(--red)')
       return
     }
 
-    // Bloqueia se estab não bater
+    // Valida estab
     if (usuario?.estab && usuario.estab !== 'todas') {
       const { data: ordemData } = await supabase
-        .from('ordens')
-        .select('estab')
-        .ilike('item_ccs', codigo)
-        .limit(1)
-        .single()
-
+        .from('ordens').select('estab').ilike('item_ccs', codigo).limit(1).single()
       if (ordemData && ordemData.estab !== usuario.estab) {
-        const planta = ordemData.estab === '100' ? 'Limeira' : 'Palmeira'
-        showToast(`❌ Este item é de ${planta}! Você não tem acesso.`, 'var(--red)')
+        const p = ordemData.estab === '100' ? 'Limeira' : 'Palmeira'
+        showToast(`❌ Este item é de ${p}!`, 'var(--red)')
         return
       }
     }
@@ -127,20 +231,8 @@ function FormUsinagem({ usuario }) {
 
   return (
     <>
-      {usuario?.estab && usuario.estab !== 'todas' && (
-        <div style={{
-          background: usuario.estab === '100' ? 'rgba(0,229,255,.1)' : 'rgba(0,255,136,.1)',
-          border: `1px solid ${usuario.estab === '100' ? 'rgba(0,229,255,.3)' : 'rgba(0,255,136,.3)'}`,
-          borderRadius: 8, padding: '8px 14px', marginBottom: 12,
-          fontSize: 12, fontWeight: 700,
-          color: usuario.estab === '100' ? 'var(--accent)' : 'var(--green)'
-        }}>
-          📍 Estabelecimento: {usuario.estab === '100' ? 'Limeira' : 'Palmeira'}
-        </div>
-      )}
-
       <div className="card">
-        <div className="card-title">Dados do item</div>
+        <div className="card-title">⚙️ Lançamento Usinagem</div>
 
         <div className="field" style={{ position: 'relative' }}>
           <label>Código do item</label>
@@ -207,7 +299,7 @@ function FormUsinagem({ usuario }) {
   )
 }
 
-function FormLaser({ usuario }) {
+function FormLaser({ usuario, planta }) {
   const [abaLaser, setAbaLaser] = useState('planejar')
 
   return (
@@ -226,11 +318,7 @@ function FormLaser({ usuario }) {
           }}>{label}</button>
         ))}
       </div>
-
-      {abaLaser === 'planejar'
-        ? <PlanejarCorte usuario={usuario} />
-        : <ApontarProducao usuario={usuario} />
-      }
+      {abaLaser === 'planejar' ? <PlanejarCorte usuario={usuario} /> : <ApontarProducao usuario={usuario} />}
     </>
   )
 }
@@ -268,10 +356,7 @@ function PlanejarCorte({ usuario }) {
   }
 
   async function buscarOrdens() {
-    if (!maquina || !job) {
-      showToast('Informe a máquina e o job!', 'var(--red)')
-      return
-    }
+    if (!maquina || !job) { showToast('Informe a máquina e o job!', 'var(--red)'); return }
     setLoading(true)
     const { data } = await supabase
       .from('ordens')
@@ -279,13 +364,11 @@ function PlanejarCorte({ usuario }) {
       .ilike('tarefa', `%${job}%`)
       .order('item_ccs')
 
-    // Bloqueia se estab não bater
     if (usuario?.estab && usuario.estab !== 'todas' && data?.length > 0) {
       const estabOrdem = data[0].estab
       if (estabOrdem !== usuario.estab) {
-        const planta = estabOrdem === '100' ? 'Limeira' : 'Palmeira'
-        showToast(`❌ Este job é de ${planta}! Você não tem acesso.`, 'var(--red)')
-        setOrdens([])
+        const p = estabOrdem === '100' ? 'Limeira' : 'Palmeira'
+        showToast(`❌ Este job é de ${p}!`, 'var(--red)')
         setLoading(false)
         return
       }
@@ -316,33 +399,17 @@ function PlanejarCorte({ usuario }) {
     })
 
     setSalvando(false)
-    if (error) {
-      showToast('Erro ao salvar!', 'var(--red)')
-    } else {
+    if (error) { showToast('Erro ao salvar!', 'var(--red)') }
+    else {
       showToast('✅ Planejamento salvo!')
-      setJob(''); setTotalChapas(''); setChapasParcial('')
-      setTipoCort('total'); setOrdens([])
+      setJob(''); setTotalChapas(''); setChapasParcial(''); setTipoCort('total'); setOrdens([])
     }
   }
 
-  const maquinasFiltradas = maquinasSalvas.filter(m =>
-    m.toLowerCase().includes(maquina.toLowerCase())
-  )
+  const maquinasFiltradas = maquinasSalvas.filter(m => m.toLowerCase().includes(maquina.toLowerCase()))
 
   return (
     <>
-      {usuario?.estab && usuario.estab !== 'todas' && (
-        <div style={{
-          background: usuario.estab === '100' ? 'rgba(0,229,255,.1)' : 'rgba(0,255,136,.1)',
-          border: `1px solid ${usuario.estab === '100' ? 'rgba(0,229,255,.3)' : 'rgba(0,255,136,.3)'}`,
-          borderRadius: 8, padding: '8px 14px', marginBottom: 12,
-          fontSize: 12, fontWeight: 700,
-          color: usuario.estab === '100' ? 'var(--accent)' : 'var(--green)'
-        }}>
-          📍 Estabelecimento: {usuario.estab === '100' ? 'Limeira' : 'Palmeira'}
-        </div>
-      )}
-
       <div className="card">
         <div className="card-title">📋 Planejar corte</div>
 
@@ -390,8 +457,7 @@ function PlanejarCorte({ usuario }) {
           <div className="field">
             <label>Total de chapas do job</label>
             <input className="input" type="number" value={totalChapas}
-              onChange={e => setTotalChapas(e.target.value)}
-              placeholder="Ex: 3" min="1" />
+              onChange={e => setTotalChapas(e.target.value)} placeholder="Ex: 3" min="1" />
           </div>
 
           <div className="field">
@@ -482,14 +548,11 @@ function ApontarProducao({ usuario }) {
       .ilike('tarefa', `%${job}%`)
       .order('item_ccs')
 
-    // Bloqueia se estab não bater
     if (usuario?.estab && usuario.estab !== 'todas' && ords?.length > 0) {
       const estabOrdem = ords[0].estab
       if (estabOrdem !== usuario.estab) {
-        const planta = estabOrdem === '100' ? 'Limeira' : 'Palmeira'
-        showToast(`❌ Este job é de ${planta}! Você não tem acesso.`, 'var(--red)')
-        setOrdens([])
-        setOrdensFiltradas([])
+        const p = estabOrdem === '100' ? 'Limeira' : 'Palmeira'
+        showToast(`❌ Este job é de ${p}!`, 'var(--red)')
         setLoading(false)
         return
       }
@@ -536,11 +599,9 @@ function ApontarProducao({ usuario }) {
       if (qtd === '') continue
       await supabase.from('laser_apontamento').insert({
         job, ordem: ordem.ordem, item_ccs: ordem.item_ccs,
-        qtd_planejada: ordem.qtde_ordem,
-        qtd_real: parseInt(qtd),
+        qtd_planejada: ordem.qtde_ordem, qtd_real: parseInt(qtd),
         maquina: planejamento?.maquina || '',
-        usuario_nome: usuario?.nome,
-        usuario_email: usuario?.email
+        usuario_nome: usuario?.nome, usuario_email: usuario?.email
       })
     }
 
@@ -554,7 +615,6 @@ function ApontarProducao({ usuario }) {
     <>
       <div className="card">
         <div className="card-title">✅ Apontar produção</div>
-
         <div className="field">
           <label>Job / Tarefa</label>
           <input className="input" value={job}
@@ -562,9 +622,7 @@ function ApontarProducao({ usuario }) {
             onKeyDown={e => e.key === 'Enter' && buscarOrdens()}
             placeholder="Ex: J092362" />
         </div>
-
-        <button className="btn-primary" onClick={buscarOrdens} disabled={loading}
-          style={{ marginBottom: 0 }}>
+        <button className="btn-primary" onClick={buscarOrdens} disabled={loading} style={{ marginBottom: 0 }}>
           {loading ? 'Buscando...' : '🔍 Buscar ordens'}
         </button>
       </div>
@@ -574,14 +632,10 @@ function ApontarProducao({ usuario }) {
           background: 'rgba(255,214,10,.08)', border: '1px solid rgba(255,214,10,.3)',
           borderRadius: 10, padding: '10px 14px', marginBottom: 12
         }}>
-          <div style={{ fontWeight: 700, color: 'var(--yellow)', marginBottom: 4 }}>
-            📋 Planejamento encontrado
-          </div>
+          <div style={{ fontWeight: 700, color: 'var(--yellow)', marginBottom: 4 }}>📋 Planejamento encontrado</div>
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>
             Máquina: {planejamento.maquina} · {planejamento.total_chapas} chapas ·
-            {planejamento.tipo === 'parcial'
-              ? ` Parcial: ${planejamento.chapas_cortar} chapas`
-              : ' Total'}
+            {planejamento.tipo === 'parcial' ? ` Parcial: ${planejamento.chapas_cortar} chapas` : ' Total'}
           </div>
         </div>
       )}
@@ -593,11 +647,9 @@ function ApontarProducao({ usuario }) {
               onChange={e => filtrarOrdens(e.target.value)}
               placeholder="Filtrar por item, ordem ou cliente..." />
           </div>
-
           <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
             {ordensFiltradas.length} de {ordens.length} ordem(s)
           </div>
-
           {ordensFiltradas.map(o => (
             <div key={o.ordem} className="card" style={{ marginBottom: 10, padding: '14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
@@ -620,11 +672,432 @@ function ApontarProducao({ usuario }) {
               </div>
             </div>
           ))}
-
           <button className="btn-primary" onClick={confirmar} disabled={salvando}>
             {salvando ? 'Salvando...' : `✅ Confirmar apontamentos`}
           </button>
         </>
+      )}
+
+      {toast && <div className="toast" style={{ background: toast.cor }}>{toast.msg}</div>}
+    </>
+  )
+}
+
+function FormOrdens({ usuario, planta }) {
+  const [query, setQuery] = useState('')
+  const [tipoBusca, setTipoBusca] = useState('item')
+  const [resultado, setResultado] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [detalhe, setDetalhe] = useState(null)
+  const [loadingDetalhe, setLoadingDetalhe] = useState(false)
+  const [modal, setModal] = useState(null)
+  const [descricao, setDescricao] = useState('')
+  const [enviando, setEnviando] = useState(false)
+  const [toast, setToast] = useState(null)
+  const [responsaveis, setResponsaveis] = useState([])
+  const [selectedResps, setSelectedResps] = useState([])
+  const [buscaResp, setBuscaResp] = useState('')
+  const [respFiltrados, setRespFiltrados] = useState([])
+
+  function showToast(msg, cor = 'var(--green)') {
+    setToast({ msg, cor })
+    setTimeout(() => setToast(null), 2500)
+  }
+
+  async function buscar() {
+    if (!query) return
+    setLoading(true)
+
+    let q = supabase.from('ordens').select('*')
+    if (tipoBusca === 'item') q = q.ilike('item_ccs', `%${query}%`)
+    else if (tipoBusca === 'ordem') q = q.ilike('ordem', `%${query}%`)
+    else if (tipoBusca === 'tarefa') q = q.ilike('tarefa', `%${query}%`)
+
+    // Filtra por planta
+    const estabFiltro = usuario?.estab !== 'todas' ? usuario?.estab : planta
+    if (estabFiltro) q = q.eq('estab', estabFiltro)
+
+    const { data, error } = await q.order('saldo', { ascending: false })
+    setLoading(false)
+    if (error) { console.error(error); return }
+
+    const ordens = data.map(r => r.ordem).filter(Boolean)
+    let apontamentos = {}
+    if (ordens.length > 0) {
+      const { data: apont } = await supabase
+        .from('apontamentos_prod')
+        .select('ordem, data_apontamento, operador, operacao, qtd_aprov')
+        .in('ordem', ordens)
+        .order('data_apontamento', { ascending: false })
+
+      if (apont) {
+        apont.forEach(a => {
+          if (!apontamentos[a.ordem]) apontamentos[a.ordem] = a
+        })
+      }
+    }
+
+    const porOper = {}
+    data.forEach(r => {
+      const op = r.prox_oper || 'Sem operação'
+      if (!porOper[op]) porOper[op] = []
+      porOper[op].push({ ...r, ultimoApont: apontamentos[r.ordem] || null })
+    })
+
+    setResultado({ found: data, porOper })
+  }
+
+  async function abrirDetalhe(r) {
+    setLoadingDetalhe(true)
+    setDetalhe({ ordem: r.ordem, item: r.item_ccs, apont: [] })
+    const { data } = await supabase
+      .from('apontamentos_prod')
+      .select('*')
+      .eq('ordem', r.ordem)
+      .order('data_apontamento', { ascending: true })
+      .limit(200)
+    setDetalhe({ ordem: r.ordem, item: r.item_ccs, apont: data || [] })
+    setLoadingDetalhe(false)
+  }
+
+  async function abrirModal(r) {
+    if (usuario?.estab && usuario.estab !== 'todas' && r.estab !== usuario.estab) {
+      showToast(`❌ Você não pode reportar esta ordem!`, 'var(--red)')
+      return
+    }
+    setModal(r)
+    setDescricao('')
+    setSelectedResps([])
+    setBuscaResp('')
+    const { data } = await supabase.from('responsaveis').select('*').eq('auto_copia', false).order('nome')
+    setResponsaveis(data || [])
+    setRespFiltrados(data || [])
+  }
+
+  function onBuscaResp(val) {
+    setBuscaResp(val)
+    if (!val) { setRespFiltrados(responsaveis); return }
+    setRespFiltrados(responsaveis.filter(r => r.nome.toLowerCase().includes(val.toLowerCase())))
+  }
+
+  function toggleResp(r) {
+    setSelectedResps(prev => {
+      const existe = prev.find(p => p.id === r.id)
+      if (existe) return prev.filter(p => p.id !== r.id)
+      return [...prev, r]
+    })
+  }
+
+  async function reportar() {
+    if (!descricao) { showToast('Descreva o problema!', 'var(--red)'); return }
+    if (selectedResps.length === 0) { showToast('Selecione pelo menos um destinatário!', 'var(--red)'); return }
+    setEnviando(true)
+
+    try {
+      const msgWpp = `⚠️ *Novo reporte - CCS Tec*\n\n*Reportado por:* ${usuario?.nome}\n*OP:* ${modal.ordem}\n*Item:* ${modal.item_ccs}\n*Problema:* ${descricao}\n\n*Enviado para:* ${selectedResps.map(r => r.nome).join(', ')}\n*Horário:* ${new Date().toLocaleString('pt-BR')}`
+
+      for (const resp of selectedResps) {
+        await supabase.from('apontamentos').insert({
+          ordem: modal.ordem, item: modal.item_ccs,
+          motivo: descricao, responsavel: resp.nome, responsavel_email: resp.email
+        })
+        try {
+          await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
+            ordem: modal.ordem, item: modal.item_ccs,
+            cliente: modal.cliente || '—', operacao: modal.prox_oper || '—',
+            saldo: modal.saldo, descricao,
+            horario: new Date().toLocaleString('pt-BR'),
+            to_email: resp.email
+          }, EMAILJS_KEY)
+        } catch (e) { console.warn('Email falhou:', e) }
+        if (resp.telefone) await enviarWhatsApp(resp.telefone, msgWpp)
+      }
+
+      const { data: supervisores } = await supabase.from('responsaveis').select('*').eq('auto_copia', true)
+      for (const sup of supervisores || []) {
+        try {
+          await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
+            ordem: modal.ordem, item: modal.item_ccs,
+            cliente: modal.cliente || '—', operacao: modal.prox_oper || '—',
+            saldo: modal.saldo, descricao,
+            horario: new Date().toLocaleString('pt-BR'),
+            to_email: sup.email
+          }, EMAILJS_KEY)
+        } catch (e) { console.warn('Email sup falhou:', e) }
+        if (sup.telefone) await enviarWhatsApp(sup.telefone, msgWpp)
+      }
+
+      await enviarWhatsApp(VICTOR_WHATSAPP, msgWpp)
+      setModal(null)
+      showToast(`✅ Enviado para ${selectedResps.map(r => r.nome.split(' ')[0]).join(', ')}!`)
+    } catch (err) {
+      console.error(err)
+      showToast('Erro ao enviar!', 'var(--red)')
+    }
+    setEnviando(false)
+  }
+
+  const totalSaldo = resultado?.found.reduce((s, r) => s + (r.saldo || 0), 0) || 0
+
+  return (
+    <>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+        {[
+          { key: 'item', label: '🔧 Item' },
+          { key: 'ordem', label: '📋 Ordem' },
+          { key: 'tarefa', label: '🎯 Tarefa' },
+        ].map(({ key, label }) => (
+          <button key={key} onClick={() => { setTipoBusca(key); setResultado(null); setQuery('') }} style={{
+            flex: 1, padding: '10px 8px', border: '1px solid',
+            borderColor: tipoBusca === key ? 'var(--accent)' : 'var(--border)',
+            background: tipoBusca === key ? 'rgba(0,229,255,.1)' : 'var(--surface)',
+            color: tipoBusca === key ? 'var(--accent)' : 'var(--muted)',
+            borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer'
+          }}>{label}</button>
+        ))}
+      </div>
+
+      <div className="search-box">
+        <input className="input" value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && buscar()}
+          placeholder={tipoBusca === 'item' ? 'Ex: 8.0124.05635.01' : tipoBusca === 'ordem' ? 'Ex: 9715787' : 'Ex: J092362'}
+        />
+        <button className="btn-search" onClick={buscar}>{loading ? '...' : 'Buscar'}</button>
+      </div>
+
+      {resultado && (
+        <>
+          {resultado.found.length === 0 ? (
+            <div className="empty"><div className="emoji">❌</div><h3>Nenhuma ordem encontrada</h3></div>
+          ) : (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
+                {[
+                  ['Ordens', resultado.found.length, 'var(--accent)'],
+                  ['Saldo', totalSaldo + ' pç', 'var(--yellow)'],
+                ].map(([l, v, c]) => (
+                  <div key={l} className="card" style={{ padding: 10, textAlign: 'center', marginBottom: 0 }}>
+                    <div style={{ fontSize: 9, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{l}</div>
+                    <div style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, color: c }}>{v}</div>
+                  </div>
+                ))}
+              </div>
+
+              {Object.entries(resultado.porOper).map(([op, rows]) => (
+                <div key={op} className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 12 }}>
+                  <div style={{ background: 'var(--surface2)', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--yellow)', flexShrink: 0 }} />
+                    <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 13, color: 'var(--yellow)', flex: 1 }}>
+                      {nomeOp(op)}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>{rows.length} ordem(s)</div>
+                  </div>
+
+                  {rows.map((r, i) => {
+                    const ap = r.ultimoApont
+                    const dias = ap ? diasParado(ap.data_apontamento) : null
+                    const cor = dias === null ? 'var(--red)' : dias === 0 ? 'var(--green)' : dias <= 3 ? 'var(--yellow)' : 'var(--red)'
+                    const texto = dias === null ? 'Sem apontamento' : dias === 0 ? 'Hoje' : `${dias}d atrás`
+                    const podeInteragir = !usuario?.estab || usuario.estab === 'todas' || r.estab === usuario.estab
+
+                    return (
+                      <div key={i} style={{ padding: '12px 14px', borderTop: '1px solid var(--border)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                              <div style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700 }}>OP {r.ordem}</div>
+                              {!podeInteragir && (
+                                <span style={{ background: 'rgba(107,114,128,.15)', color: 'var(--muted)', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4 }}>🔒 Leitura</span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--muted)' }}>{r.item_ccs} · {r.cliente || '—'}</div>
+                            {r.tarefa && <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 1 }}>🎯 {r.tarefa}</div>}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 5 }}>
+                              <div style={{ width: 7, height: 7, borderRadius: '50%', background: cor }} />
+                              <span style={{ fontSize: 11, color: cor, fontWeight: 600 }}>{texto}</span>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                            <div style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: 'var(--yellow)' }}>{r.saldo} pç</div>
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <button onClick={() => abrirDetalhe(r)} style={{
+                                background: 'rgba(0,229,255,.1)', border: '1px solid rgba(0,229,255,.3)',
+                                borderRadius: 8, padding: '5px 10px', cursor: 'pointer',
+                                color: 'var(--accent)', fontSize: 11, fontWeight: 700,
+                                display: 'flex', alignItems: 'center', gap: 4
+                              }}>
+                                <ChevronRight size={12} /> Detalhar
+                              </button>
+                              {podeInteragir && (
+                                <button onClick={() => abrirModal(r)} style={{
+                                  background: 'rgba(255,107,53,.15)', border: '1px solid rgba(255,107,53,.4)',
+                                  borderRadius: 8, padding: '5px 8px', cursor: 'pointer',
+                                  color: '#ff6b35', display: 'flex', alignItems: 'center'
+                                }}>
+                                  <AlertTriangle size={12} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ))}
+            </>
+          )}
+        </>
+      )}
+
+      {/* Modal detalhe */}
+      {detalhe && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200 }}>
+          <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', padding: 24, width: '100%', maxWidth: 480, maxHeight: '80vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>Roteiro de apontamentos</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>OP {detalhe.ordem} · {detalhe.item}</div>
+              </div>
+              <button onClick={() => setDetalhe(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            {loadingDetalhe ? (
+              <div style={{ textAlign: 'center', padding: 20, color: 'var(--muted)' }}>Carregando...</div>
+            ) : detalhe.apont.length === 0 ? (
+              <div className="empty" style={{ padding: 20 }}>
+                <div className="emoji">📭</div>
+                <p>Nenhum apontamento encontrado</p>
+              </div>
+            ) : (() => {
+              const grupos = {}
+              detalhe.apont.forEach(a => {
+                const chave = a.desc_operacao || nomeOp(a.operacao) || 'Outros'
+                if (!grupos[chave]) grupos[chave] = { nome: chave, items: [], primeiraData: a.data_apontamento }
+                grupos[chave].items.push(a)
+              })
+
+              const gruposOrdenados = Object.values(grupos).sort((a, b) =>
+                parseData(a.primeiraData) - parseData(b.primeiraData)
+              )
+
+              let qtdAnterior = null
+              return gruposOrdenados.map((grupo) => {
+                const totalOK = grupo.items.reduce((s, a) => s + (a.qtd_aprov || 0), 0)
+                const totalRef = grupo.items.reduce((s, a) => s + (a.qtd_refug || 0), 0)
+                const ultimo = [...grupo.items].sort((a, b) => parseData(b.data_apontamento) - parseData(a.data_apontamento))[0]
+                const dias = diasParado(ultimo?.data_apontamento)
+                let icone = qtdAnterior !== null && totalOK < qtdAnterior ? '⚠️' : '✅'
+                let corBorda = qtdAnterior !== null && totalOK < qtdAnterior ? 'var(--yellow)' : 'var(--green)'
+                qtdAnterior = totalOK
+
+                return (
+                  <div key={grupo.nome} style={{ marginBottom: 10 }}>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '10px 12px', borderRadius: 8,
+                      background: 'var(--surface2)', border: `1px solid ${corBorda}33`
+                    }}>
+                      <div style={{ fontSize: 16 }}>{icone}</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700 }}>{grupo.nome}</div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                          {ultimo?.data_apontamento} · {ultimo?.operador}
+                          {dias !== null ? ` · ${dias === 0 ? 'hoje' : dias + 'd atrás'}` : ''}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, color: 'var(--green)' }}>{totalOK} pç</div>
+                        {totalRef > 0 && <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--red)' }}>{totalRef} ref.</div>}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* Modal reportar */}
+      {modal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200 }}>
+          <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', padding: 24, width: '100%', maxWidth: 480, maxHeight: '85vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+              <AlertTriangle size={20} color="#ff6b35" />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>Reportar problema</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>OP {modal.ordem} · {modal.item_ccs}</div>
+              </div>
+              <button onClick={() => setModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            {selectedResps.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                {selectedResps.map(r => (
+                  <div key={r.id} style={{
+                    background: 'rgba(0,229,255,.1)', border: '1px solid rgba(0,229,255,.3)',
+                    borderRadius: 20, padding: '4px 10px', fontSize: 12, fontWeight: 700,
+                    color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 6
+                  }}>
+                    {r.nome.split(' ')[0]}
+                    <button onClick={() => toggleResp(r)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', padding: 0 }}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="field">
+              <label>Enviar para <span style={{ fontSize: 11, color: 'var(--muted)' }}>(selecione um ou mais)</span></label>
+              <input className="input" value={buscaResp}
+                onChange={e => onBuscaResp(e.target.value)}
+                placeholder="Filtrar por nome..." />
+            </div>
+
+            <div style={{ background: 'var(--surface2)', borderRadius: 10, overflow: 'hidden', marginBottom: 14, border: '1px solid var(--border)' }}>
+              {respFiltrados.map(r => {
+                const selecionado = selectedResps.some(p => p.id === r.id)
+                return (
+                  <div key={r.id} onClick={() => toggleResp(r)} style={{
+                    padding: '10px 14px', cursor: 'pointer',
+                    borderBottom: '1px solid var(--border)',
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    background: selecionado ? 'rgba(0,229,255,.08)' : 'transparent'
+                  }}>
+                    <div style={{
+                      width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+                      border: `2px solid ${selecionado ? 'var(--accent)' : 'var(--border)'}`,
+                      background: selecionado ? 'var(--accent)' : 'transparent',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}>
+                      {selecionado && <span style={{ fontSize: 12, color: '#000', fontWeight: 700 }}>✓</span>}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700 }}>{r.nome}</div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)' }}>{r.setor} · {r.telefone ? '📱 WhatsApp' : '📧 Email'}</div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="field">
+              <label>Descreva o problema</label>
+              <textarea className="input" value={descricao} onChange={e => setDescricao(e.target.value)}
+                placeholder="Ex: peça com defeito, falta material..."
+                style={{ minHeight: 100, resize: 'vertical', fontSize: 14 }} />
+            </div>
+
+            <button className="btn-primary" onClick={reportar} disabled={enviando}>
+              {enviando ? 'Enviando...' : `⚠️ Enviar${selectedResps.length > 0 ? ` para ${selectedResps.length} pessoa(s)` : ''}`}
+            </button>
+          </div>
+        </div>
       )}
 
       {toast && <div className="toast" style={{ background: toast.cor }}>{toast.msg}</div>}

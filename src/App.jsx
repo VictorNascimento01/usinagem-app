@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, useNavigate, Navigate } from 'react-router-dom'
-import { ClipboardList, Search, Package, Lock, LogOut, Activity, Zap, Users, Bell, X, Send } from 'lucide-react'
+import { Home, Search, Lock, LogOut, Activity, Users, Bell, X, Send } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import Formulario from './pages/Formulario'
 import Consulta from './pages/Consulta'
-import Ordens from './pages/Ordens'
 import Admin from './pages/Admin'
 import Login from './pages/Login'
 import Sequor from './pages/Sequor'
@@ -16,7 +15,7 @@ const SENHA_APP = 'ccs2024'
 const SUPABASE_URL = 'https://bsxfsiakvukhrivzylsp.supabase.co'
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzeGZzaWFrdnVraHJpdnp5bHNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzODkxODMsImV4cCI6MjA5NDk2NTE4M30.GycXQkAofWIp-bVcIZyBnKNSJmfjhitnyt4jYenpAkg'
 const VICTOR_WHATSAPP = '5519987556217'
-const TELAS = ['Formulário', 'Consultar', 'Ordens', 'Sequor', 'Laser', 'Equipe', 'Admin', 'Outro']
+const TELAS = ['Início', 'Sequor', 'Laser', 'Consultar', 'Equipe', 'Admin', 'Outro']
 
 function Manutencao({ onSenha }) {
   const [senha, setSenha] = useState('')
@@ -44,10 +43,10 @@ function Manutencao({ onSenha }) {
         justifyContent: 'center', fontSize: 26, marginBottom: 20
       }}>⚙️</div>
       <h1 style={{ fontFamily: 'monospace', fontSize: 22, color: 'var(--accent)', marginBottom: 6 }}>
-        USINAGEM APP
+        CCS TEC
       </h1>
       <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 32, textAlign: 'center' }}>
-        Sistema em configuração — acesso restrito
+        Sistema de gestão de produção
       </p>
       <div style={{ width: '100%', maxWidth: 340 }}>
         <div className="card">
@@ -161,14 +160,12 @@ function Layout({ usuario, onLogout }) {
     if (data) {
       setMensagens(prev => [...prev, data])
       setNovaMensagem('')
-
       const msg = `💬 *Chat CCS Tec*\n\n*OP:* ${chatAberto.ordem}\n*Item:* ${chatAberto.item}\n*${usuario.nome}:* ${novaMensagem}`
       await fetch(`${SUPABASE_URL}/functions/v1/enviar-whatsapp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
         body: JSON.stringify({ numero: VICTOR_WHATSAPP, mensagem: msg })
       })
-
       carregarReportes()
     }
     setEnviandoMsg(false)
@@ -183,7 +180,7 @@ function Layout({ usuario, onLogout }) {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
         body: JSON.stringify({
           numero: VICTOR_WHATSAPP,
-          mensagem: `🐛 *Feedback do App - CCS Tec*\n\n*Usuário:* ${usuario?.nome}\n*Tela:* ${feedbackTela || 'Não informado'}\n*Mensagem:* ${feedbackMsg}\n*Horário:* ${new Date().toLocaleString('pt-BR')}`
+          mensagem: `🐛 *Feedback - CCS Tec*\n\n*Usuário:* ${usuario?.nome}\n*Tela:* ${feedbackTela || 'Não informado'}\n*Mensagem:* ${feedbackMsg}\n*Horário:* ${new Date().toLocaleString('pt-BR')}`
         })
       })
       setFeedbackOk(true)
@@ -207,6 +204,7 @@ function Layout({ usuario, onLogout }) {
 
   return (
     <div className="app">
+      {/* Header */}
       <div style={{
         position: 'fixed', top: 0, left: '50%', transform: 'translateX(-50%)',
         width: '100%', maxWidth: 480, background: 'var(--surface)',
@@ -222,12 +220,12 @@ function Layout({ usuario, onLogout }) {
           <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{usuario.nome}</div>
         </div>
 
+        {/* Sininho */}
         <button onClick={() => { setChatModal(true); setChatAberto(null) }} style={{
           background: 'var(--surface2)', border: '1px solid var(--border)',
           borderRadius: 8, padding: '7px 10px', cursor: 'pointer',
           color: naoLidas > 0 ? 'var(--yellow)' : 'var(--muted)',
-          display: 'flex', alignItems: 'center', gap: 4,
-          position: 'relative'
+          display: 'flex', alignItems: 'center', position: 'relative'
         }}>
           <Bell size={16} />
           {naoLidas > 0 && (
@@ -262,10 +260,9 @@ function Layout({ usuario, onLogout }) {
       <main className="content" style={{ paddingTop: 70 }}>
         <Routes>
           <Route path="/" element={<Formulario usuario={usuario} />} />
-          <Route path="/consulta" element={<Consulta />} />
-          <Route path="/ordens" element={<Ordens usuario={usuario} />} />
           <Route path="/sequor" element={<Sequor />} />
           <Route path="/laser" element={<Laser />} />
+          <Route path="/consulta" element={<Consulta />} />
           <Route path="/equipe" element={<Equipe usuario={usuario} />} />
           <Route path="/admin" element={<Admin usuario={usuario} />} />
           <Route path="*" element={<Navigate to="/" />} />
@@ -286,7 +283,6 @@ function Layout({ usuario, onLogout }) {
       {chatModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480, maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
-
             <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
               {chatAberto ? (
                 <>
@@ -310,10 +306,7 @@ function Layout({ usuario, onLogout }) {
             {!chatAberto && (
               <div style={{ overflowY: 'auto', flex: 1, padding: 16 }}>
                 {reportes.length === 0 ? (
-                  <div className="empty">
-                    <div className="emoji">✅</div>
-                    <h3>Nenhum reporte ativo</h3>
-                  </div>
+                  <div className="empty"><div className="emoji">✅</div><h3>Nenhum reporte ativo</h3></div>
                 ) : reportes.map(r => (
                   <div key={r.id} onClick={() => abrirChat(r)} className="card" style={{ marginBottom: 10, cursor: 'pointer' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -322,24 +315,12 @@ function Layout({ usuario, onLogout }) {
                         <div style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700 }}>OP {r.ordem} · {r.item}</div>
                         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{r.motivo}</div>
                         {r.ultimaMsg ? (
-                          <div style={{
-                            fontSize: 11, marginTop: 4, padding: '4px 8px',
-                            background: 'var(--surface2)', borderRadius: 6,
-                            display: 'flex', gap: 4
-                          }}>
-                            <span style={{ color: 'var(--accent)', fontWeight: 700 }}>
-                              {r.ultimaMsg.usuario_nome.split(' ')[0]}:
-                            </span>
-                            <span style={{ color: 'var(--muted)' }}>
-                              {r.ultimaMsg.mensagem.length > 30
-                                ? r.ultimaMsg.mensagem.slice(0, 30) + '...'
-                                : r.ultimaMsg.mensagem}
-                            </span>
+                          <div style={{ fontSize: 11, marginTop: 4, padding: '4px 8px', background: 'var(--surface2)', borderRadius: 6, display: 'flex', gap: 4 }}>
+                            <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{r.ultimaMsg.usuario_nome.split(' ')[0]}:</span>
+                            <span style={{ color: 'var(--muted)' }}>{r.ultimaMsg.mensagem.length > 30 ? r.ultimaMsg.mensagem.slice(0, 30) + '...' : r.ultimaMsg.mensagem}</span>
                           </div>
                         ) : (
-                          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
-                            💬 Sem mensagens ainda
-                          </div>
+                          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>💬 Sem mensagens ainda</div>
                         )}
                         <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>
                           👤 {r.responsavel} · {formatarHora(r.ultimaMsg?.criado_em || r.criado_em)}
@@ -368,16 +349,12 @@ function Layout({ usuario, onLogout }) {
 
                   {mensagens.length === 0 ? (
                     <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13, padding: 20 }}>
-                      Nenhuma mensagem ainda. Seja o primeiro a comentar!
+                      Nenhuma mensagem ainda!
                     </div>
                   ) : mensagens.map((m, i) => {
                     const meu = m.usuario_email === usuario.email
                     return (
-                      <div key={i} style={{
-                        display: 'flex', flexDirection: 'column',
-                        alignItems: meu ? 'flex-end' : 'flex-start',
-                        marginBottom: 10
-                      }}>
+                      <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: meu ? 'flex-end' : 'flex-start', marginBottom: 10 }}>
                         <div style={{
                           maxWidth: '80%', padding: '8px 12px', borderRadius: 12,
                           background: meu ? 'var(--accent)' : 'var(--surface2)',
@@ -386,9 +363,7 @@ function Layout({ usuario, onLogout }) {
                           {!meu && <div style={{ fontSize: 10, fontWeight: 700, marginBottom: 4, color: 'var(--accent)' }}>{m.usuario_nome}</div>}
                           <div style={{ fontSize: 13 }}>{m.mensagem}</div>
                         </div>
-                        <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
-                          {formatarHora(m.criado_em)}
-                        </div>
+                        <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{formatarHora(m.criado_em)}</div>
                       </div>
                     )
                   })}
@@ -424,9 +399,7 @@ function Layout({ usuario, onLogout }) {
                 <div style={{ fontWeight: 700, fontSize: 14 }}>Reportar problema no app</div>
                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>Vai direto pro Victor via WhatsApp</div>
               </div>
-              <button onClick={() => setFeedbackModal(false)} style={{
-                background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 20
-              }}>×</button>
+              <button onClick={() => setFeedbackModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 20 }}>×</button>
             </div>
 
             {feedbackOk ? (
@@ -450,7 +423,6 @@ function Layout({ usuario, onLogout }) {
                     ))}
                   </div>
                 </div>
-
                 <div className="field">
                   <label>O que aconteceu?</label>
                   <textarea className="input" value={feedbackMsg}
@@ -458,7 +430,6 @@ function Layout({ usuario, onLogout }) {
                     placeholder="Descreva o problema ou sugestão..."
                     style={{ minHeight: 80, resize: 'vertical', fontSize: 14 }} />
                 </div>
-
                 <button className="btn-primary" onClick={enviarFeedback} disabled={enviandoFeedback}
                   style={{ background: 'var(--yellow)', color: '#000' }}>
                   {enviandoFeedback ? 'Enviando...' : '🚀 Enviar feedback'}
@@ -469,26 +440,23 @@ function Layout({ usuario, onLogout }) {
         </div>
       )}
 
+      {/* Nav */}
       <nav className="bottom-nav">
         <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
-          <ClipboardList size={22} />
-          <span>Formulário</span>
-        </NavLink>
-        <NavLink to="/consulta" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
-          <Search size={22} />
-          <span>Consultar</span>
-        </NavLink>
-        <NavLink to="/ordens" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
-          <Package size={22} />
-          <span>Ordens</span>
+          <Home size={22} />
+          <span>Início</span>
         </NavLink>
         <NavLink to="/sequor" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
           <Activity size={22} />
           <span>Sequor</span>
         </NavLink>
         <NavLink to="/laser" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
-          <Zap size={22} />
+          <span style={{ fontSize: 22 }}>⚡</span>
           <span>Laser</span>
+        </NavLink>
+        <NavLink to="/consulta" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+          <Search size={22} />
+          <span>Consultar</span>
         </NavLink>
         {isLiderOuMais && (
           <NavLink to="/equipe" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
