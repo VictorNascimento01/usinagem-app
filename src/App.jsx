@@ -12,10 +12,11 @@ import Equipe from './pages/Equipe'
 import './App.css'
 
 const SENHA_APP = import.meta.env.VITE_APP_KEY
-const SUPABASE_URL = 'https://bsxfsiakvukhrivzylsp.supabase.co'
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzeGZzaWFrdnVraHJpdnp5bHNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzODkxODMsImV4cCI6MjA5NDk2NTE4M30.GycXQkAofWIp-bVcIZyBnKNSJmfjhitnyt4jYenpAkg'
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 const VICTOR_WHATSAPP = '5519987556217'
 const TELAS = ['Início', 'Sequor', 'Laser', 'Consultar', 'Equipe', 'Admin', 'Outro']
+const SESSAO_DURACAO = 8 * 60 * 60 * 1000 // 8 horas em ms
 
 function Manutencao({ onSenha }) {
   const [senha, setSenha] = useState('')
@@ -473,7 +474,21 @@ export default function App() {
     if (key === SENHA_APP) setLiberado(true)
 
     const salvo = localStorage.getItem('usuario')
-    if (salvo) {
+    const loginTime = localStorage.getItem('login_time')
+
+    if (salvo && loginTime) {
+      // Verifica se a sessão expirou
+      const agora = Date.now()
+      const tempoLogado = agora - parseInt(loginTime)
+
+      if (tempoLogado > SESSAO_DURACAO) {
+        // Sessão expirada — desloga
+        localStorage.removeItem('usuario')
+        localStorage.removeItem('login_time')
+        setCarregando(false)
+        return
+      }
+
       const usuarioLocal = JSON.parse(salvo)
       supabase
         .from('usuarios')
@@ -495,9 +510,15 @@ export default function App() {
   }, [])
 
   function onSenha() { setLiberado(true) }
-  function onLogin(user) { setUsuario(user) }
+
+  function onLogin(user) {
+    localStorage.setItem('login_time', Date.now().toString())
+    setUsuario(user)
+  }
+
   function onLogout() {
     localStorage.removeItem('usuario')
+    localStorage.removeItem('login_time')
     setUsuario(null)
   }
 
