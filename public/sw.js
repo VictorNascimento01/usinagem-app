@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ccstec-v2'
+const CACHE_NAME = 'ccstec-v3'
 const urlsToCache = [
   '/',
   '/index.html',
