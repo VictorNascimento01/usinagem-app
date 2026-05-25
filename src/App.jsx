@@ -11,7 +11,7 @@ import Laser from './pages/Laser'
 import Equipe from './pages/Equipe'
 import './App.css'
 
-const SENHA_APP = 'ccs2024'
+const SENHA_APP = import.meta.env.VITE_APP_KEY
 const SUPABASE_URL = 'https://bsxfsiakvukhrivzylsp.supabase.co'
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzeGZzaWFrdnVraHJpdnp5bHNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzODkxODMsImV4cCI6MjA5NDk2NTE4M30.GycXQkAofWIp-bVcIZyBnKNSJmfjhitnyt4jYenpAkg'
 const VICTOR_WHATSAPP = '5519987556217'
