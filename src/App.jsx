@@ -41,7 +41,7 @@ function Manutencao({ onSenha }) {
 
     if (senha === SENHA_APP) {
       localStorage.removeItem('app_attempts')
-      sessionStorage.setItem('appkey', SENHA_APP)
+      localStorage.setItem('appkey', SENHA_APP)
       onSenha()
     } else {
       setErro('❌ Senha incorreta!')
@@ -487,7 +487,7 @@ export default function App() {
   const [carregando, setCarregando] = useState(true)
 
   useEffect(() => {
-    const key = sessionStorage.getItem('appkey')
+    const key = localStorage.getItem('appkey')
     if (key === SENHA_APP) setLiberado(true)
 
     const salvo = localStorage.getItem('usuario')
