@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import bcrypt from 'bcryptjs'
 import { supabase } from '../lib/supabase'
 
 export default function Login({ onLogin }) {
@@ -54,7 +55,26 @@ export default function Login({ onLogin }) {
       .ilike('email', emailSalvo || email)
       .single()
 
-    if (!data || data.senha !== senha) {
+    if (!data) {
+      setErro('Usuário não encontrado!')
+      setLoading(false)
+      return
+    }
+
+    // Verifica se é hash ou texto puro (migração gradual)
+    let senhaCorreta = false
+    if (data.senha?.startsWith('$2')) {
+      senhaCorreta = await bcrypt.compare(senha, data.senha)
+    } else {
+      senhaCorreta = data.senha === senha
+      // Migra pra hash automaticamente
+      if (senhaCorreta) {
+        const hash = await bcrypt.hash(senha, 10)
+        await supabase.from('usuarios').update({ senha: hash }).eq('id', data.id)
+      }
+    }
+
+    if (!senhaCorreta) {
       setErro('Senha incorreta!')
       setLoading(false)
       return
@@ -74,15 +94,15 @@ export default function Login({ onLogin }) {
     setLoading(true)
     setErro(null)
 
-    // Formata telefone
+    const hash = await bcrypt.hash(novaSenha, 10)
     const telFormatado = telefone ? '55' + telefone.replace(/\D/g, '') : null
 
     await supabase
       .from('usuarios')
-      .update({ senha: novaSenha, telefone: telFormatado })
+      .update({ senha: hash, telefone: telFormatado })
       .eq('id', usuarioEncontrado.id)
 
-    const atualizado = { ...usuarioEncontrado, senha: novaSenha, telefone: telFormatado }
+    const atualizado = { ...usuarioEncontrado, senha: hash, telefone: telFormatado }
     localStorage.setItem('ultimo_email', atualizado.email)
     localStorage.setItem('ultimo_nome', atualizado.nome)
     localStorage.setItem('usuario', JSON.stringify(atualizado))
@@ -100,11 +120,12 @@ export default function Login({ onLogin }) {
     setLoading(true)
     setErro(null)
 
+    const hash = await bcrypt.hash(novaSenha, 10)
     const telFormatado = telefone ? '55' + telefone.replace(/\D/g, '') : null
 
     const { data, error } = await supabase
       .from('usuarios')
-      .insert({ nome, email, nivel: 'operador', estab, senha: novaSenha, telefone: telFormatado })
+      .insert({ nome, email, nivel: 'operador', estab, senha: hash, telefone: telFormatado })
       .select()
       .single()
 
@@ -134,7 +155,7 @@ export default function Login({ onLogin }) {
 
   const campoTelefone = (
     <div className="field">
-      <label>WhatsApp <span style={{ fontSize: 11, color: 'var(--muted)' }}>(opcional — para receber reportes)</span></label>
+      <label>WhatsApp <span style={{ fontSize: 11, color: 'var(--muted)' }}>(opcional)</span></label>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <div style={{
           background: 'var(--surface2)', border: '1px solid var(--border)',
@@ -161,7 +182,7 @@ export default function Login({ onLogin }) {
       }}>⚙️</div>
 
       <h1 style={{ fontFamily: 'monospace', fontSize: 22, color: 'var(--accent)', marginBottom: 6 }}>
-        USINAGEM APP
+        CCS TEC
       </h1>
       <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 32, textAlign: 'center' }}>
         {etapa === 'senha' ? `Olá, ${nome}! 👋` : 'Identifique-se para continuar'}
