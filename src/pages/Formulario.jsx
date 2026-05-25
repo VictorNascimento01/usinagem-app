@@ -7,8 +7,8 @@ import emailjs from '@emailjs/browser'
 const EMAILJS_SERVICE = 'service_b110i99'
 const EMAILJS_TEMPLATE = 'template_1gm1y15'
 const EMAILJS_KEY = 'TrKMj1WLgqrejytoU'
-const SUPABASE_URL = 'https://bsxfsiakvukhrivzylsp.supabase.co'
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzeGZzaWFrdnVraHJpdnp5bHNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzODkxODMsImV4cCI6MjA5NDk2NTE4M30.GycXQkAofWIp-bVcIZyBnKNSJmfjhitnyt4jYenpAkg'
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 const VICTOR_WHATSAPP = '5519987556217'
 
 const OPERACOES = {
@@ -428,7 +428,6 @@ function PlanejarCorte({ usuario }) {
     <>
       <div className="card">
         <div className="card-title">📋 Planejar corte</div>
-
         <div className="field" style={{ position: 'relative' }}>
           <label>Máquina</label>
           <input className="input" value={maquina}
@@ -451,7 +450,6 @@ function PlanejarCorte({ usuario }) {
             </div>
           )}
         </div>
-
         <div className="field">
           <label>Job / Tarefa</label>
           <input className="input" value={job}
@@ -459,7 +457,6 @@ function PlanejarCorte({ usuario }) {
             onKeyDown={e => e.key === 'Enter' && buscarOrdens()}
             placeholder="Ex: J092362" />
         </div>
-
         <div className="field">
           <label>Turno</label>
           {isLiderOuMais ? (
@@ -480,7 +477,6 @@ function PlanejarCorte({ usuario }) {
             </div>
           )}
         </div>
-
         <button className="btn-primary" onClick={buscarOrdens} disabled={loading}
           style={{ background: 'var(--yellow)', color: '#000', marginBottom: 0 }}>
           {loading ? 'Buscando...' : '🔍 Buscar ordens'}
@@ -490,13 +486,11 @@ function PlanejarCorte({ usuario }) {
       {ordens.length > 0 && (
         <div className="card">
           <div className="card-title">Ordens do job {job}</div>
-
           <div className="field">
             <label>Total de chapas do job</label>
             <input className="input" type="number" value={totalChapas}
               onChange={e => setTotalChapas(e.target.value)} placeholder="Ex: 3" min="1" />
           </div>
-
           <div className="field">
             <label>Vai cortar</label>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -511,7 +505,6 @@ function PlanejarCorte({ usuario }) {
               ))}
             </div>
           </div>
-
           {tipoCort === 'parcial' && (
             <div className="field">
               <label>Quantas chapas vai cortar agora?</label>
@@ -520,9 +513,7 @@ function PlanejarCorte({ usuario }) {
                 placeholder={`de ${totalChapas || '?'} chapas`} min="1" />
             </div>
           )}
-
           <div style={{ height: 1, background: 'var(--border)', margin: '8px 0 16px' }} />
-
           {ordens.map((o, i) => (
             <div key={i} style={{
               padding: '10px 0', borderBottom: '1px solid var(--border)',
@@ -546,7 +537,6 @@ function PlanejarCorte({ usuario }) {
               </div>
             </div>
           ))}
-
           <button className="btn-primary" onClick={confirmar} disabled={salvando}
             style={{ background: 'var(--yellow)', color: '#000', marginTop: 16 }}>
             {salvando ? 'Salvando...' : '✅ Confirmar planejamento'}
@@ -810,13 +800,33 @@ function FormOrdens({ usuario, planta }) {
     if (!descricao) { showToast('Descreva o problema!', 'var(--red)'); return }
     if (selectedResps.length === 0) { showToast('Selecione pelo menos um destinatário!', 'var(--red)'); return }
     setEnviando(true)
+
     try {
       const msgWpp = `⚠️ *Novo reporte - CCS Tec*\n\n*Reportado por:* ${usuario?.nome}\n*OP:* ${modal.ordem}\n*Item:* ${modal.item_ccs}\n*Problema:* ${descricao}\n\n*Enviado para:* ${selectedResps.map(r => r.nome).join(', ')}\n*Horário:* ${new Date().toLocaleString('pt-BR')}`
+
+      // Monta lista de participantes — quem reportou + destinatários + supervisores
+      const { data: supervisores } = await supabase.from('responsaveis').select('*').eq('auto_copia', true)
+      const participantes = [
+        usuario?.email,
+        ...selectedResps.map(r => r.email),
+        ...(supervisores || []).map(s => s.email)
+      ].filter(Boolean)
+
+      // Busca telefones dos participantes para notificações do chat
+      const { data: usuariosParticipantes } = await supabase
+        .from('usuarios')
+        .select('email, telefone')
+        .in('email', participantes)
+
       for (const resp of selectedResps) {
+        // Salva reporte com participantes
         await supabase.from('apontamentos').insert({
           ordem: modal.ordem, item: modal.item_ccs,
-          motivo: descricao, responsavel: resp.nome, responsavel_email: resp.email
+          motivo: descricao, responsavel: resp.nome,
+          responsavel_email: resp.email,
+          participantes
         })
+
         try {
           await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
             ordem: modal.ordem, item: modal.item_ccs,
@@ -825,9 +835,10 @@ function FormOrdens({ usuario, planta }) {
             horario: new Date().toLocaleString('pt-BR'), to_email: resp.email
           }, EMAILJS_KEY)
         } catch (e) { console.warn(e) }
+
         if (resp.telefone) await enviarWhatsApp(resp.telefone, msgWpp)
       }
-      const { data: supervisores } = await supabase.from('responsaveis').select('*').eq('auto_copia', true)
+
       for (const sup of supervisores || []) {
         try {
           await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
@@ -839,6 +850,7 @@ function FormOrdens({ usuario, planta }) {
         } catch (e) { console.warn(e) }
         if (sup.telefone) await enviarWhatsApp(sup.telefone, msgWpp)
       }
+
       await enviarWhatsApp(VICTOR_WHATSAPP, msgWpp)
       setModal(null)
       showToast(`✅ Enviado para ${selectedResps.map(r => r.nome.split(' ')[0]).join(', ')}!`)

@@ -16,7 +16,7 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 const VICTOR_WHATSAPP = '5519987556217'
 const TELAS = ['Início', 'Sequor', 'Laser', 'Consultar', 'Equipe', 'Admin', 'Outro']
-const SESSAO_DURACAO = 8 * 60 * 60 * 1000 // 8 horas
+const SESSAO_DURACAO = 8 * 60 * 60 * 1000
 
 function Manutencao({ onSenha }) {
   const [senha, setSenha] = useState('')
@@ -178,12 +178,36 @@ function Layout({ usuario, onLogout }) {
     if (data) {
       setMensagens(prev => [...prev, data])
       setNovaMensagem('')
+
       const msg = `💬 *Chat CCS Tec*\n\n*OP:* ${chatAberto.ordem}\n*Item:* ${chatAberto.item}\n*${usuario.nome}:* ${novaMensagem}`
+
+      // Notifica todos os participantes
+      const participantes = chatAberto.participantes || []
+      if (participantes.length > 0) {
+        const { data: users } = await supabase
+          .from('usuarios')
+          .select('email, telefone')
+          .in('email', participantes)
+          .neq('email', usuario.email)
+
+        for (const u of users || []) {
+          if (u.telefone) {
+            await fetch(`${SUPABASE_URL}/functions/v1/enviar-whatsapp`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+              body: JSON.stringify({ numero: u.telefone, mensagem: msg })
+            })
+          }
+        }
+      }
+
+      // Victor sempre recebe
       await fetch(`${SUPABASE_URL}/functions/v1/enviar-whatsapp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
         body: JSON.stringify({ numero: VICTOR_WHATSAPP, mensagem: msg })
       })
+
       carregarReportes()
     }
     setEnviandoMsg(false)
@@ -277,7 +301,7 @@ function Layout({ usuario, onLogout }) {
         <Routes>
           <Route path="/" element={<Formulario usuario={usuario} />} />
           <Route path="/sequor" element={<Sequor />} />
-          <Route path="/laser" element={<Laser />} />
+          <Route path="/laser" element={<Laser usuario={usuario} />} />
           <Route path="/consulta" element={<Consulta />} />
           <Route path="/equipe" element={<Equipe usuario={usuario} />} />
           <Route path="/admin" element={<Admin usuario={usuario} />} />

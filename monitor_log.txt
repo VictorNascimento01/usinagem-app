@@ -380,3 +380,38 @@
 [25/05/2026 15:36:05] Enviando ordens... 34293/34293
 [25/05/2026 15:36:05] ✅ 34293 registros enviados para ordens!
 [25/05/2026 15:36:05] Sem mudança nos apontamentos
+[25/05/2026 16:36:05] 📄 CPCC detectado: CPCC0401.csv
+[25/05/2026 16:36:05] Atualizando ordens com CPCC0401.csv...
+[25/05/2026 16:36:05] 34199 ordens encontradas
+[25/05/2026 16:36:06] Tabela ordens limpa!
+[25/05/2026 16:36:08] Enviando ordens... 1000/34199
+[25/05/2026 16:36:09] Enviando ordens... 2000/34199
+[25/05/2026 16:36:10] Enviando ordens... 3000/34199
+[25/05/2026 16:36:11] Enviando ordens... 4000/34199
+[25/05/2026 16:36:11] Enviando ordens... 5000/34199
+[25/05/2026 16:36:12] Enviando ordens... 6000/34199
+[25/05/2026 16:36:14] Enviando ordens... 7000/34199
+[25/05/2026 16:36:14] Enviando ordens... 8000/34199
+[25/05/2026 16:36:15] Enviando ordens... 9000/34199
+[25/05/2026 16:36:16] Enviando ordens... 10000/34199
+[25/05/2026 16:36:17] Enviando ordens... 11000/34199
+[25/05/2026 16:36:18] Enviando ordens... 12000/34199
+[25/05/2026 16:36:19] Enviando ordens... 13000/34199
+[25/05/2026 16:36:19] Enviando ordens... 14000/34199
+[25/05/2026 16:36:20] Enviando ordens... 15000/34199
+[25/05/2026 16:36:21] Enviando ordens... 16000/34199
+[25/05/2026 16:36:21] Enviando ordens... 17000/34199
+[25/05/2026 16:36:22] Enviando ordens... 18000/34199
+[25/05/2026 16:36:23] Enviando ordens... 19000/34199
+[25/05/2026 16:36:24] Enviando ordens... 20000/34199
+[25/05/2026 16:36:25] Enviando ordens... 21000/34199
+[25/05/2026 16:36:26] Enviando ordens... 22000/34199
+[25/05/2026 16:36:27] Enviando ordens... 23000/34199
+[25/05/2026 16:36:27] Enviando ordens... 24000/34199
+[25/05/2026 16:36:28] Enviando ordens... 25000/34199
+[25/05/2026 16:36:29] Enviando ordens... 26000/34199
+[25/05/2026 16:36:30] Enviando ordens... 27000/34199
+[25/05/2026 16:36:31] Enviando ordens... 28000/34199
+[25/05/2026 16:36:32] Enviando ordens... 29000/34199
+[25/05/2026 16:36:33] Enviando ordens... 30000/34199
+[25/05/2026 16:36:34] Enviando ordens... 31000/34199
