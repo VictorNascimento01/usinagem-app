@@ -91,6 +91,15 @@ function parseData(dataStr) {
   } catch { return new Date(0) }
 }
 
+function formatarTempo(minutos) {
+  if (!minutos) return '—'
+  const h = Math.floor(minutos / 60)
+  const m = minutos % 60
+  if (h === 0) return `${m}min`
+  if (m === 0) return `${h}h`
+  return `${h}h${m}min`
+}
+
 async function enviarWhatsApp(numero, mensagem) {
   try {
     await fetch(`${SUPABASE_URL}/functions/v1/enviar-whatsapp`, {
@@ -346,6 +355,7 @@ function PlanejarCorte({ usuario }) {
   const [turno, setTurno] = useState(detectarTurno())
   const [ordens, setOrdens] = useState([])
   const [totalChapas, setTotalChapas] = useState('')
+  const [tempoChapa, setTempoChapa] = useState('')
   const [tipoCort, setTipoCort] = useState('total')
   const [chapasParcial, setChapasParcial] = useState('')
   const [loading, setLoading] = useState(false)
@@ -404,11 +414,17 @@ function PlanejarCorte({ usuario }) {
 
     setSalvando(true)
     const estab = ordens[0]?.estab || ''
+    const chapasCortar = tipoCort === 'parcial' ? parseInt(chapasParcial) : parseInt(totalChapas)
+    const tempoTotal = tempoChapa ? chapasCortar * parseInt(tempoChapa) : null
+
     const { error } = await supabase.from('laser_planejamento').insert({
       job, maquina, turno,
       total_chapas: parseInt(totalChapas),
       tipo: tipoCort,
-      chapas_cortar: tipoCort === 'parcial' ? parseInt(chapasParcial) : parseInt(totalChapas),
+      chapas_cortar: chapasCortar,
+      tempo_chapa: tempoChapa ? parseInt(tempoChapa) : null,
+      chapas_feitas: 0,
+      finalizado: false,
       estab, usuario_nome: usuario?.nome, usuario_email: usuario?.email
     })
 
@@ -418,11 +434,14 @@ function PlanejarCorte({ usuario }) {
       showToast('✅ Planejamento salvo!')
       setJob(''); setTotalChapas(''); setChapasParcial('')
       setTipoCort('total'); setOrdens([])
+      setTempoChapa('')
       setTurno(detectarTurno())
     }
   }
 
   const maquinasFiltradas = maquinasSalvas.filter(m => m.toLowerCase().includes(maquina.toLowerCase()))
+  const chapasParaCortar = tipoCort === 'parcial' ? parseInt(chapasParcial) || 0 : parseInt(totalChapas) || 0
+  const tempoTotalMin = tempoChapa && chapasParaCortar ? chapasParaCortar * parseInt(tempoChapa) : null
 
   return (
     <>
@@ -450,6 +469,7 @@ function PlanejarCorte({ usuario }) {
             </div>
           )}
         </div>
+
         <div className="field">
           <label>Job / Tarefa</label>
           <input className="input" value={job}
@@ -457,6 +477,7 @@ function PlanejarCorte({ usuario }) {
             onKeyDown={e => e.key === 'Enter' && buscarOrdens()}
             placeholder="Ex: J092362" />
         </div>
+
         <div className="field">
           <label>Turno</label>
           {isLiderOuMais ? (
@@ -477,6 +498,7 @@ function PlanejarCorte({ usuario }) {
             </div>
           )}
         </div>
+
         <button className="btn-primary" onClick={buscarOrdens} disabled={loading}
           style={{ background: 'var(--yellow)', color: '#000', marginBottom: 0 }}>
           {loading ? 'Buscando...' : '🔍 Buscar ordens'}
@@ -486,11 +508,13 @@ function PlanejarCorte({ usuario }) {
       {ordens.length > 0 && (
         <div className="card">
           <div className="card-title">Ordens do job {job}</div>
+
           <div className="field">
             <label>Total de chapas do job</label>
             <input className="input" type="number" value={totalChapas}
-              onChange={e => setTotalChapas(e.target.value)} placeholder="Ex: 3" min="1" />
+              onChange={e => setTotalChapas(e.target.value)} placeholder="Ex: 10" min="1" />
           </div>
+
           <div className="field">
             <label>Vai cortar</label>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -505,6 +529,7 @@ function PlanejarCorte({ usuario }) {
               ))}
             </div>
           </div>
+
           {tipoCort === 'parcial' && (
             <div className="field">
               <label>Quantas chapas vai cortar agora?</label>
@@ -513,7 +538,36 @@ function PlanejarCorte({ usuario }) {
                 placeholder={`de ${totalChapas || '?'} chapas`} min="1" />
             </div>
           )}
+
+          <div className="field">
+            <label>Tempo por chapa (CNC) <span style={{ fontSize: 11, color: 'var(--muted)' }}>(opcional — em minutos)</span></label>
+            <input className="input" type="number" value={tempoChapa}
+              onChange={e => setTempoChapa(e.target.value)}
+              placeholder="Ex: 45 minutos por chapa" min="1" />
+          </div>
+
+          {/* Tempo total estimado */}
+          {tempoTotalMin && (
+            <div style={{
+              background: 'rgba(0,229,255,.08)', border: '1px solid rgba(0,229,255,.3)',
+              borderRadius: 10, padding: '12px 16px', marginBottom: 16,
+              display: 'flex', alignItems: 'center', gap: 12
+            }}>
+              <div style={{ fontSize: 24 }}>⏱️</div>
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 2 }}>Tempo total estimado</div>
+                <div style={{ fontFamily: 'monospace', fontSize: 20, fontWeight: 700, color: 'var(--accent)' }}>
+                  {formatarTempo(tempoTotalMin)}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                  {chapasParaCortar} chapa(s) × {tempoChapa} min/chapa
+                </div>
+              </div>
+            </div>
+          )}
+
           <div style={{ height: 1, background: 'var(--border)', margin: '8px 0 16px' }} />
+
           {ordens.map((o, i) => (
             <div key={i} style={{
               padding: '10px 0', borderBottom: '1px solid var(--border)',
@@ -537,6 +591,7 @@ function PlanejarCorte({ usuario }) {
               </div>
             </div>
           ))}
+
           <button className="btn-primary" onClick={confirmar} disabled={salvando}
             style={{ background: 'var(--yellow)', color: '#000', marginTop: 16 }}>
             {salvando ? 'Salvando...' : '✅ Confirmar planejamento'}
@@ -630,6 +685,13 @@ function ApontarProducao({ usuario }) {
       })
     }
 
+    // Marca planejamento como finalizado se for total
+    if (planejamento && planejamento.tipo === 'total') {
+      await supabase.from('laser_planejamento')
+        .update({ finalizado: true })
+        .eq('id', planejamento.id)
+    }
+
     setSalvando(false)
     showToast('✅ Apontamentos salvos!')
     setOrdens([]); setOrdensFiltradas([]); setJob('')
@@ -659,9 +721,10 @@ function ApontarProducao({ usuario }) {
         }}>
           <div style={{ fontWeight: 700, color: 'var(--yellow)', marginBottom: 4 }}>📋 Planejamento encontrado</div>
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-            Máquina: {planejamento.maquina} · {planejamento.total_chapas} chapas ·
-            {planejamento.turno ? ` ${nomeTurno(planejamento.turno)} ·` : ''}
-            {planejamento.tipo === 'parcial' ? ` Parcial: ${planejamento.chapas_cortar} chapas` : ' Total'}
+            Máquina: {planejamento.maquina} · {planejamento.total_chapas} chapas
+            {planejamento.turno ? ` · ${nomeTurno(planejamento.turno)}` : ''}
+            {planejamento.tipo === 'parcial' ? ` · Parcial: ${planejamento.chapas_cortar} chapas` : ' · Total'}
+            {planejamento.tempo_chapa ? ` · ⏱️ ${formatarTempo(planejamento.chapas_cortar * planejamento.tempo_chapa)} estimado` : ''}
           </div>
         </div>
       )}
@@ -804,7 +867,6 @@ function FormOrdens({ usuario, planta }) {
     try {
       const msgWpp = `⚠️ *Novo reporte - CCS Tec*\n\n*Reportado por:* ${usuario?.nome}\n*OP:* ${modal.ordem}\n*Item:* ${modal.item_ccs}\n*Problema:* ${descricao}\n\n*Enviado para:* ${selectedResps.map(r => r.nome).join(', ')}\n*Horário:* ${new Date().toLocaleString('pt-BR')}`
 
-      // Monta lista de participantes — quem reportou + destinatários + supervisores
       const { data: supervisores } = await supabase.from('responsaveis').select('*').eq('auto_copia', true)
       const participantes = [
         usuario?.email,
@@ -812,21 +874,13 @@ function FormOrdens({ usuario, planta }) {
         ...(supervisores || []).map(s => s.email)
       ].filter(Boolean)
 
-      // Busca telefones dos participantes para notificações do chat
-      const { data: usuariosParticipantes } = await supabase
-        .from('usuarios')
-        .select('email, telefone')
-        .in('email', participantes)
-
       for (const resp of selectedResps) {
-        // Salva reporte com participantes
         await supabase.from('apontamentos').insert({
           ordem: modal.ordem, item: modal.item_ccs,
           motivo: descricao, responsavel: resp.nome,
           responsavel_email: resp.email,
           participantes
         })
-
         try {
           await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
             ordem: modal.ordem, item: modal.item_ccs,
@@ -835,7 +889,6 @@ function FormOrdens({ usuario, planta }) {
             horario: new Date().toLocaleString('pt-BR'), to_email: resp.email
           }, EMAILJS_KEY)
         } catch (e) { console.warn(e) }
-
         if (resp.telefone) await enviarWhatsApp(resp.telefone, msgWpp)
       }
 
