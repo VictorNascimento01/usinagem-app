@@ -339,3 +339,44 @@
 [25/05/2026 14:35:35] Enviando ordens... 34332/34332
 [25/05/2026 14:35:35] ✅ 34332 registros enviados para ordens!
 [25/05/2026 14:35:35] Sem mudança nos apontamentos
+[25/05/2026 15:35:35] 📄 CPCC detectado: CPCC0401.csv
+[25/05/2026 15:35:35] Atualizando ordens com CPCC0401.csv...
+[25/05/2026 15:35:35] 34293 ordens encontradas
+[25/05/2026 15:35:37] Tabela ordens limpa!
+[25/05/2026 15:35:39] Enviando ordens... 1000/34293
+[25/05/2026 15:35:40] Enviando ordens... 2000/34293
+[25/05/2026 15:35:41] Enviando ordens... 3000/34293
+[25/05/2026 15:35:42] Enviando ordens... 4000/34293
+[25/05/2026 15:35:43] Enviando ordens... 5000/34293
+[25/05/2026 15:35:44] Enviando ordens... 6000/34293
+[25/05/2026 15:35:45] Enviando ordens... 7000/34293
+[25/05/2026 15:35:47] Enviando ordens... 8000/34293
+[25/05/2026 15:35:48] Enviando ordens... 9000/34293
+[25/05/2026 15:35:48] Enviando ordens... 10000/34293
+[25/05/2026 15:35:49] Enviando ordens... 11000/34293
+[25/05/2026 15:35:50] Enviando ordens... 12000/34293
+[25/05/2026 15:35:50] Enviando ordens... 13000/34293
+[25/05/2026 15:35:51] Enviando ordens... 14000/34293
+[25/05/2026 15:35:52] Enviando ordens... 15000/34293
+[25/05/2026 15:35:52] Enviando ordens... 16000/34293
+[25/05/2026 15:35:54] Enviando ordens... 17000/34293
+[25/05/2026 15:35:55] Enviando ordens... 18000/34293
+[25/05/2026 15:35:55] Enviando ordens... 19000/34293
+[25/05/2026 15:35:56] Enviando ordens... 20000/34293
+[25/05/2026 15:35:57] Enviando ordens... 21000/34293
+[25/05/2026 15:35:57] Enviando ordens... 22000/34293
+[25/05/2026 15:35:58] Enviando ordens... 23000/34293
+[25/05/2026 15:35:58] Enviando ordens... 24000/34293
+[25/05/2026 15:35:59] Enviando ordens... 25000/34293
+[25/05/2026 15:35:59] Enviando ordens... 26000/34293
+[25/05/2026 15:36:00] Enviando ordens... 27000/34293
+[25/05/2026 15:36:01] Enviando ordens... 28000/34293
+[25/05/2026 15:36:01] Enviando ordens... 29000/34293
+[25/05/2026 15:36:02] Enviando ordens... 30000/34293
+[25/05/2026 15:36:02] Enviando ordens... 31000/34293
+[25/05/2026 15:36:03] Enviando ordens... 32000/34293
+[25/05/2026 15:36:04] Enviando ordens... 33000/34293
+[25/05/2026 15:36:04] Enviando ordens... 34000/34293
+[25/05/2026 15:36:05] Enviando ordens... 34293/34293
+[25/05/2026 15:36:05] ✅ 34293 registros enviados para ordens!
+[25/05/2026 15:36:05] Sem mudança nos apontamentos
