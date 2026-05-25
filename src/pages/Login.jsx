@@ -2,6 +2,32 @@ import { useState } from 'react'
 import bcrypt from 'bcryptjs'
 import { supabase } from '../lib/supabase'
 
+// Rate limiting — máximo 5 tentativas em 15 minutos
+function verificarRateLimit(email) {
+  const key = `login_attempts_${email}`
+  const dados = JSON.parse(localStorage.getItem(key) || '{"tentativas":0,"primeiro":0}')
+  const agora = Date.now()
+  const quinzeMin = 15 * 60 * 1000
+
+  if (agora - dados.primeiro > quinzeMin) {
+    localStorage.setItem(key, JSON.stringify({ tentativas: 1, primeiro: agora }))
+    return { bloqueado: false, tentativasRestantes: 4 }
+  }
+
+  if (dados.tentativas >= 5) {
+    const tempoRestante = Math.ceil((quinzeMin - (agora - dados.primeiro)) / 60000)
+    return { bloqueado: true, tempoRestante }
+  }
+
+  dados.tentativas += 1
+  localStorage.setItem(key, JSON.stringify(dados))
+  return { bloqueado: false, tentativasRestantes: 5 - dados.tentativas }
+}
+
+function resetRateLimit(email) {
+  localStorage.removeItem(`login_attempts_${email}`)
+}
+
 export default function Login({ onLogin }) {
   const emailSalvo = localStorage.getItem('ultimo_email')
   const nomeSalvo = localStorage.getItem('ultimo_nome')
@@ -46,13 +72,22 @@ export default function Login({ onLogin }) {
 
   async function entrarComSenha() {
     if (!senha) { setErro('Digite sua senha!'); return }
+
+    const emailVerificar = emailSalvo || email
+    const rate = verificarRateLimit(emailVerificar)
+
+    if (rate.bloqueado) {
+      setErro(`🔒 Muitas tentativas! Tente novamente em ${rate.tempoRestante} minuto(s).`)
+      return
+    }
+
     setLoading(true)
     setErro(null)
 
     const { data } = await supabase
       .from('usuarios')
       .select('*')
-      .ilike('email', emailSalvo || email)
+      .ilike('email', emailVerificar)
       .single()
 
     if (!data) {
@@ -61,13 +96,11 @@ export default function Login({ onLogin }) {
       return
     }
 
-    // Verifica se é hash ou texto puro (migração gradual)
     let senhaCorreta = false
     if (data.senha?.startsWith('$2')) {
       senhaCorreta = await bcrypt.compare(senha, data.senha)
     } else {
       senhaCorreta = data.senha === senha
-      // Migra pra hash automaticamente
       if (senhaCorreta) {
         const hash = await bcrypt.hash(senha, 10)
         await supabase.from('usuarios').update({ senha: hash }).eq('id', data.id)
@@ -75,11 +108,12 @@ export default function Login({ onLogin }) {
     }
 
     if (!senhaCorreta) {
-      setErro('Senha incorreta!')
+      setErro(`❌ Senha incorreta! ${rate.tentativasRestantes} tentativa(s) restante(s).`)
       setLoading(false)
       return
     }
 
+    resetRateLimit(emailVerificar)
     localStorage.setItem('ultimo_email', data.email)
     localStorage.setItem('ultimo_nome', data.nome)
     localStorage.setItem('usuario', JSON.stringify(data))
@@ -191,7 +225,6 @@ export default function Login({ onLogin }) {
       <div style={{ width: '100%', maxWidth: 380 }}>
         <div className="card">
 
-          {/* Etapa 1 — Email */}
           {etapa === 'email' && (
             <>
               <div className="card-title">Acesso</div>
@@ -215,7 +248,6 @@ export default function Login({ onLogin }) {
             </>
           )}
 
-          {/* Etapa 2 — Senha */}
           {etapa === 'senha' && (
             <>
               <div style={{
@@ -261,7 +293,6 @@ export default function Login({ onLogin }) {
             </>
           )}
 
-          {/* Etapa 3 — Criar senha */}
           {etapa === 'criar_senha' && (
             <>
               <div className="card-title">Crie sua senha</div>
@@ -299,7 +330,6 @@ export default function Login({ onLogin }) {
             </>
           )}
 
-          {/* Etapa 4 — Novo usuário */}
           {etapa === 'novo' && (
             <>
               <div className="card-title">Novo cadastro</div>

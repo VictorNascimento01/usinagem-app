@@ -16,19 +16,36 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 const VICTOR_WHATSAPP = '5519987556217'
 const TELAS = ['Início', 'Sequor', 'Laser', 'Consultar', 'Equipe', 'Admin', 'Outro']
-const SESSAO_DURACAO = 8 * 60 * 60 * 1000 // 8 horas em ms
+const SESSAO_DURACAO = 8 * 60 * 60 * 1000 // 8 horas
 
 function Manutencao({ onSenha }) {
   const [senha, setSenha] = useState('')
-  const [erro, setErro] = useState(false)
+  const [erro, setErro] = useState(null)
 
   function tentar() {
+    const key = 'app_attempts'
+    const dados = JSON.parse(localStorage.getItem(key) || '{"tentativas":0,"primeiro":0}')
+    const agora = Date.now()
+    const quinzeMin = 15 * 60 * 1000
+
+    if (agora - dados.primeiro > quinzeMin) {
+      localStorage.setItem(key, JSON.stringify({ tentativas: 1, primeiro: agora }))
+    } else if (dados.tentativas >= 5) {
+      const tempoRestante = Math.ceil((quinzeMin - (agora - dados.primeiro)) / 60000)
+      setErro(`🔒 Muitas tentativas! Tente em ${tempoRestante} minuto(s).`)
+      return
+    } else {
+      dados.tentativas += 1
+      localStorage.setItem(key, JSON.stringify(dados))
+    }
+
     if (senha === SENHA_APP) {
+      localStorage.removeItem('app_attempts')
       sessionStorage.setItem('appkey', SENHA_APP)
       onSenha()
     } else {
-      setErro(true)
-      setTimeout(() => setErro(false), 2000)
+      setErro('❌ Senha incorreta!')
+      setTimeout(() => setErro(null), 2000)
     }
   }
 
@@ -59,7 +76,7 @@ function Manutencao({ onSenha }) {
               placeholder="Digite a senha..."
               style={{ borderColor: erro ? 'var(--red)' : undefined }}
             />
-            {erro && <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 6 }}>❌ Senha incorreta!</div>}
+            {erro && <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 6 }}>{erro}</div>}
           </div>
           <button className="btn-primary" onClick={tentar}>Entrar</button>
         </div>
@@ -477,12 +494,10 @@ export default function App() {
     const loginTime = localStorage.getItem('login_time')
 
     if (salvo && loginTime) {
-      // Verifica se a sessão expirou
       const agora = Date.now()
       const tempoLogado = agora - parseInt(loginTime)
 
       if (tempoLogado > SESSAO_DURACAO) {
-        // Sessão expirada — desloga
         localStorage.removeItem('usuario')
         localStorage.removeItem('login_time')
         setCarregando(false)
