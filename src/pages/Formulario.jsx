@@ -355,7 +355,8 @@ function PlanejarCorte({ usuario }) {
   const [turno, setTurno] = useState(detectarTurno())
   const [ordens, setOrdens] = useState([])
   const [totalChapas, setTotalChapas] = useState('')
-  const [tempoChapa, setTempoChapa] = useState('')
+  const [tempoH, setTempoH] = useState('')
+  const [tempoM, setTempoM] = useState('')
   const [tipoCort, setTipoCort] = useState('total')
   const [chapasParcial, setChapasParcial] = useState('')
   const [loading, setLoading] = useState(false)
@@ -415,14 +416,14 @@ function PlanejarCorte({ usuario }) {
     setSalvando(true)
     const estab = ordens[0]?.estab || ''
     const chapasCortar = tipoCort === 'parcial' ? parseInt(chapasParcial) : parseInt(totalChapas)
-    const tempoTotal = tempoChapa ? chapasCortar * parseInt(tempoChapa) : null
+    const tempoUnitMin = (parseInt(tempoH) || 0) * 60 + (parseInt(tempoM) || 0)
 
     const { error } = await supabase.from('laser_planejamento').insert({
       job, maquina, turno,
       total_chapas: parseInt(totalChapas),
       tipo: tipoCort,
       chapas_cortar: chapasCortar,
-      tempo_chapa: tempoChapa ? parseInt(tempoChapa) : null,
+      tempo_chapa: tempoUnitMin || null,
       chapas_feitas: 0,
       finalizado: false,
       estab, usuario_nome: usuario?.nome, usuario_email: usuario?.email
@@ -434,14 +435,15 @@ function PlanejarCorte({ usuario }) {
       showToast('✅ Planejamento salvo!')
       setJob(''); setTotalChapas(''); setChapasParcial('')
       setTipoCort('total'); setOrdens([])
-      setTempoChapa('')
+      setTempoH(''); setTempoM('')
       setTurno(detectarTurno())
     }
   }
 
   const maquinasFiltradas = maquinasSalvas.filter(m => m.toLowerCase().includes(maquina.toLowerCase()))
   const chapasParaCortar = tipoCort === 'parcial' ? parseInt(chapasParcial) || 0 : parseInt(totalChapas) || 0
-  const tempoTotalMin = tempoChapa && chapasParaCortar ? chapasParaCortar * parseInt(tempoChapa) : null
+  const tempoUnitMin = (parseInt(tempoH) || 0) * 60 + (parseInt(tempoM) || 0)
+  const tempoTotalMin = tempoUnitMin && chapasParaCortar ? chapasParaCortar * tempoUnitMin : null
 
   return (
     <>
@@ -540,14 +542,24 @@ function PlanejarCorte({ usuario }) {
           )}
 
           <div className="field">
-            <label>Tempo por chapa (CNC) <span style={{ fontSize: 11, color: 'var(--muted)' }}>(opcional — em minutos)</span></label>
-            <input className="input" type="number" value={tempoChapa}
-              onChange={e => setTempoChapa(e.target.value)}
-              placeholder="Ex: 45 minutos por chapa" min="1" />
+            <label>Tempo por chapa (CNC) <span style={{ fontSize: 11, color: 'var(--muted)' }}>(opcional)</span></label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ flex: 1 }}>
+                <input className="input" type="number" value={tempoH}
+                  onChange={e => setTempoH(e.target.value)}
+                  placeholder="0" min="0" />
+                <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', marginTop: 4 }}>horas</div>
+              </div>
+              <div style={{ flex: 1 }}>
+                <input className="input" type="number" value={tempoM}
+                  onChange={e => setTempoM(e.target.value)}
+                  placeholder="0" min="0" max="59" />
+                <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', marginTop: 4 }}>minutos</div>
+              </div>
+            </div>
           </div>
 
-          {/* Tempo total estimado */}
-          {tempoTotalMin && (
+          {tempoTotalMin > 0 && (
             <div style={{
               background: 'rgba(0,229,255,.08)', border: '1px solid rgba(0,229,255,.3)',
               borderRadius: 10, padding: '12px 16px', marginBottom: 16,
@@ -560,7 +572,7 @@ function PlanejarCorte({ usuario }) {
                   {formatarTempo(tempoTotalMin)}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-                  {chapasParaCortar} chapa(s) × {tempoChapa} min/chapa
+                  {chapasParaCortar} chapa(s) × {formatarTempo(tempoUnitMin)}/chapa
                 </div>
               </div>
             </div>
@@ -685,7 +697,6 @@ function ApontarProducao({ usuario }) {
       })
     }
 
-    // Marca planejamento como finalizado se for total
     if (planejamento && planejamento.tipo === 'total') {
       await supabase.from('laser_planejamento')
         .update({ finalizado: true })
@@ -878,8 +889,7 @@ function FormOrdens({ usuario, planta }) {
         await supabase.from('apontamentos').insert({
           ordem: modal.ordem, item: modal.item_ccs,
           motivo: descricao, responsavel: resp.nome,
-          responsavel_email: resp.email,
-          participantes
+          responsavel_email: resp.email, participantes
         })
         try {
           await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
