@@ -24,12 +24,19 @@ function nomeTurno(t) {
 }
 
 function formatarTempo(minutos) {
-  if (!minutos) return '—'
+  if (!minutos || minutos <= 0) return '—'
   const h = Math.floor(minutos / 60)
   const m = minutos % 60
   if (h === 0) return `${m}min`
   if (m === 0) return `${h}h`
   return `${h}h${m}min`
+}
+
+function previsaoTermino(minutosRestantes) {
+  if (!minutosRestantes || minutosRestantes <= 0) return null
+  const agora = new Date()
+  agora.setMinutes(agora.getMinutes() + minutosRestantes)
+  return agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 }
 
 async function enviarWhatsApp(numero, mensagem) {
@@ -234,7 +241,6 @@ function Sequencia({ planta, usuario }) {
   const [dados, setDados] = useState([])
   const [loading, setLoading] = useState(true)
   const [reportando, setReportando] = useState(null)
-  const isLiderOuMais = ['lider', 'supervisor', 'super'].includes(usuario?.nivel)
 
   useEffect(() => { carregarSequencia() }, [planta])
 
@@ -253,10 +259,7 @@ function Sequencia({ planta, usuario }) {
   async function marcarChapa(job) {
     const novas = (job.chapas_feitas || 0) + 1
     const finalizado = novas >= job.chapas_cortar
-    await supabase.from('laser_planejamento').update({
-      chapas_feitas: novas,
-      finalizado
-    }).eq('id', job.id)
+    await supabase.from('laser_planejamento').update({ chapas_feitas: novas, finalizado }).eq('id', job.id)
     setDados(prev => prev.map(d => d.id === job.id ? { ...d, chapas_feitas: novas, finalizado } : d).filter(d => !d.finalizado))
   }
 
@@ -305,7 +308,8 @@ function Sequencia({ planta, usuario }) {
           {jobs.map((job, idx) => {
             const chapasFeitas = job.chapas_feitas || 0
             const chapasTotal = job.chapas_cortar || job.total_chapas || 0
-            const tempoTotal = job.tempo_chapa ? (chapasTotal - chapasFeitas) * job.tempo_chapa : null
+            const tempoRestante = job.tempo_chapa ? (chapasTotal - chapasFeitas) * job.tempo_chapa : null
+            const previsao = tempoRestante ? previsaoTermino(tempoRestante) : null
 
             return (
               <div key={job.id} style={{ padding: '14px 16px', borderTop: '1px solid var(--border)' }}>
@@ -326,7 +330,7 @@ function Sequencia({ planta, usuario }) {
                         background: job.tipo === 'parcial' ? 'rgba(255,107,53,.2)' : 'rgba(0,255,136,.2)',
                         color: job.tipo === 'parcial' ? '#ff6b35' : 'var(--green)',
                         fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4
-                      }}>{job.tipo === 'parcial' ? `⚡ Parcial` : `✅ Total`}</span>
+                      }}>{job.tipo === 'parcial' ? '⚡ Parcial' : '✅ Total'}</span>
                       {job.estab && (
                         <span style={{
                           background: job.estab === '100' ? 'rgba(0,229,255,.15)' : 'rgba(0,255,136,.15)',
@@ -334,21 +338,23 @@ function Sequencia({ planta, usuario }) {
                           fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4
                         }}>{job.estab === '100' ? 'Limeira' : 'Palmeira'}</span>
                       )}
-                      {tempoTotal && (
-                        <span style={{ fontSize: 10, color: 'var(--muted)' }}>⏱️ {formatarTempo(tempoTotal)} restante</span>
-                      )}
                     </div>
 
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 2 }}>
                       👤 {job.usuario_nome} · {formatarHora(job.criado_em)}
                     </div>
 
-                    {/* Barra de progresso */}
+                    {tempoRestante !== null && (
+                      <div style={{ fontSize: 11, color: 'var(--accent)', marginBottom: 4, display: 'flex', gap: 10 }}>
+                        <span>⏱️ {formatarTempo(tempoRestante)} restante</span>
+                        {previsao && <span style={{ color: 'var(--green)', fontWeight: 700 }}>🏁 {previsao}</span>}
+                      </div>
+                    )}
+
                     <BarraProgresso feitas={chapasFeitas} total={chapasTotal} cor="var(--yellow)" />
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {/* Botão marcar chapa */}
                     <button onClick={() => marcarChapa(job)} style={{
                       background: 'rgba(0,255,136,.15)', border: '1px solid rgba(0,255,136,.3)',
                       borderRadius: 8, padding: '6px 8px', cursor: 'pointer',
@@ -385,6 +391,8 @@ function Planejamentos({ planta, usuario }) {
   const [loadingOrdens, setLoadingOrdens] = useState(false)
   const [reportando, setReportando] = useState(null)
   const [editando, setEditando] = useState(null)
+  const [editTempoH, setEditTempoH] = useState('')
+  const [editTempoM, setEditTempoM] = useState('')
   const [salvandoEdit, setSalvandoEdit] = useState(false)
   const [toast, setToast] = useState(null)
   const isLiderOuMais = ['lider', 'supervisor', 'super'].includes(usuario?.nivel)
@@ -413,15 +421,25 @@ function Planejamentos({ planta, usuario }) {
     setLoadingOrdens(false)
   }
 
+  function abrirEdicao(p) {
+    setEditando({ ...p })
+    const h = Math.floor((p.tempo_chapa || 0) / 60)
+    const m = (p.tempo_chapa || 0) % 60
+    setEditTempoH(h > 0 ? String(h) : '')
+    setEditTempoM(m > 0 ? String(m) : '')
+  }
+
   async function salvarEdicao() {
     if (!editando) return
     setSalvandoEdit(true)
+    const tempoUnitMin = (parseInt(editTempoH) || 0) * 60 + (parseInt(editTempoM) || 0)
     await supabase.from('laser_planejamento').update({
       total_chapas: parseInt(editando.total_chapas),
       chapas_cortar: parseInt(editando.chapas_cortar),
+      chapas_feitas: parseInt(editando.chapas_feitas) || 0,
       turno: editando.turno,
       maquina: editando.maquina,
-      tempo_chapa: editando.tempo_chapa ? parseInt(editando.tempo_chapa) : null,
+      tempo_chapa: tempoUnitMin || null,
       finalizado: editando.finalizado
     }).eq('id', editando.id)
     setSalvandoEdit(false)
@@ -460,9 +478,7 @@ function Planejamentos({ planta, usuario }) {
                 <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => abrirDetalhe(p)}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                     <div style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700 }}>{p.job}</div>
-                    <span style={{ background: 'rgba(255,107,53,.2)', color: '#ff6b35', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4 }}>
-                      ⏳ Pendente
-                    </span>
+                    <span style={{ background: 'rgba(255,107,53,.2)', color: '#ff6b35', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4 }}>⏳ Pendente</span>
                     {p.estab && (
                       <span style={{
                         background: p.estab === '100' ? 'rgba(0,229,255,.15)' : 'rgba(0,255,136,.15)',
@@ -472,16 +488,16 @@ function Planejamentos({ planta, usuario }) {
                     )}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--muted)' }}>🖨️ {p.maquina} · {nomeTurno(p.turno)}</div>
-                  <BarraProgresso feitas={p.chapas_feitas || 0} total={p.chapas_cortar || p.total_chapas} cor="#ff6b35" />
                   {p.tempo_chapa && (
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
-                      ⏱️ {formatarTempo((p.chapas_cortar || p.total_chapas) * p.tempo_chapa)} estimado
+                    <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 4 }}>
+                      ⏱️ {formatarTempo((p.chapas_cortar || p.total_chapas) * p.tempo_chapa)} estimado · {formatarTempo(p.tempo_chapa)}/chapa
                     </div>
                   )}
+                  <BarraProgresso feitas={p.chapas_feitas || 0} total={p.chapas_cortar || p.total_chapas} cor="#ff6b35" />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {isLiderOuMais && (
-                    <button onClick={() => setEditando({ ...p })} style={{
+                    <button onClick={() => abrirEdicao(p)} style={{
                       background: 'rgba(0,229,255,.1)', border: '1px solid rgba(0,229,255,.3)',
                       borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: 'var(--accent)'
                     }}>
@@ -520,7 +536,7 @@ function Planejamentos({ planta, usuario }) {
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {isLiderOuMais && (
-                    <button onClick={() => setEditando({ ...p })} style={{
+                    <button onClick={() => abrirEdicao(p)} style={{
                       background: 'rgba(0,229,255,.1)', border: '1px solid rgba(0,229,255,.3)',
                       borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: 'var(--accent)'
                     }}>
@@ -540,7 +556,6 @@ function Planejamentos({ planta, usuario }) {
         </>
       )}
 
-      {/* Modal detalhe */}
       {detalhe && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', padding: 24, width: '100%', maxWidth: 480, maxHeight: '80vh', overflowY: 'auto' }}>
@@ -553,11 +568,11 @@ function Planejamentos({ planta, usuario }) {
                 <X size={20} />
               </button>
             </div>
-            <div style={{ background: 'rgba(255,214,10,.08)', border: '1px solid rgba(255,214,10,.3)', borderRadius: 10, padding: '10px 14px', marginBottom: 16 }}>
+            <div style={{ background: 'rgba(255,214,10,.08)', border: '1px solid rgba(255,214,10,.3)', borderRadius: 10, padding: '10px 14px', marginBottom: 12 }}>
               <div style={{ fontSize: 12, color: 'var(--muted)' }}>👤 {detalhe.usuario_nome} · {new Date(detalhe.criado_em).toLocaleString('pt-BR')}</div>
               {detalhe.tempo_chapa && (
                 <div style={{ fontSize: 12, color: 'var(--accent)', marginTop: 4 }}>
-                  ⏱️ {formatarTempo((detalhe.chapas_cortar || detalhe.total_chapas) * detalhe.tempo_chapa)} estimado
+                  ⏱️ {formatarTempo((detalhe.chapas_cortar || detalhe.total_chapas) * detalhe.tempo_chapa)} estimado · {formatarTempo(detalhe.tempo_chapa)}/chapa
                 </div>
               )}
             </div>
@@ -581,7 +596,6 @@ function Planejamentos({ planta, usuario }) {
         </div>
       )}
 
-      {/* Modal editar planejamento */}
       {editando && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', padding: 24, width: '100%', maxWidth: 480, maxHeight: '85vh', overflowY: 'auto' }}>
@@ -595,12 +609,10 @@ function Planejamentos({ planta, usuario }) {
                 <X size={20} />
               </button>
             </div>
-
             <div className="field">
               <label>Máquina</label>
               <input className="input" value={editando.maquina || ''} onChange={e => setEditando(p => ({ ...p, maquina: e.target.value }))} />
             </div>
-
             <div className="field">
               <label>Turno</label>
               <select className="input" value={editando.turno || '1'} onChange={e => setEditando(p => ({ ...p, turno: e.target.value }))}>
@@ -609,34 +621,35 @@ function Planejamentos({ planta, usuario }) {
                 <option value="3">3º Turno</option>
               </select>
             </div>
-
             <div className="field">
               <label>Total de chapas</label>
               <input className="input" type="number" value={editando.total_chapas || ''} onChange={e => setEditando(p => ({ ...p, total_chapas: e.target.value }))} min="1" />
             </div>
-
             <div className="field">
               <label>Chapas a cortar</label>
               <input className="input" type="number" value={editando.chapas_cortar || ''} onChange={e => setEditando(p => ({ ...p, chapas_cortar: e.target.value }))} min="1" />
             </div>
-
             <div className="field">
               <label>Chapas feitas</label>
               <input className="input" type="number" value={editando.chapas_feitas || 0} onChange={e => setEditando(p => ({ ...p, chapas_feitas: parseInt(e.target.value) || 0 }))} min="0" />
             </div>
-
             <div className="field">
-              <label>Tempo por chapa (min)</label>
-              <input className="input" type="number" value={editando.tempo_chapa || ''} onChange={e => setEditando(p => ({ ...p, tempo_chapa: e.target.value }))} min="1" />
+              <label>Tempo por chapa (CNC) <span style={{ fontSize: 11, color: 'var(--muted)' }}>(opcional)</span></label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <input className="input" type="number" value={editTempoH} onChange={e => setEditTempoH(e.target.value)} placeholder="0" min="0" />
+                  <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', marginTop: 4 }}>horas</div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <input className="input" type="number" value={editTempoM} onChange={e => setEditTempoM(e.target.value)} placeholder="0" min="0" max="59" />
+                  <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', marginTop: 4 }}>minutos</div>
+                </div>
+              </div>
             </div>
-
             <div className="field">
               <label>Status</label>
               <div style={{ display: 'flex', gap: 8 }}>
-                {[
-                  { key: false, label: '⏳ Pendente' },
-                  { key: true, label: '✅ Finalizado' },
-                ].map(({ key, label }) => (
+                {[{ key: false, label: '⏳ Pendente' }, { key: true, label: '✅ Finalizado' }].map(({ key, label }) => (
                   <button key={String(key)} onClick={() => setEditando(p => ({ ...p, finalizado: key }))} style={{
                     flex: 1, padding: '10px', border: '1px solid',
                     borderColor: editando.finalizado === key ? 'var(--accent)' : 'var(--border)',
@@ -647,7 +660,6 @@ function Planejamentos({ planta, usuario }) {
                 ))}
               </div>
             </div>
-
             <button className="btn-primary" onClick={salvarEdicao} disabled={salvandoEdit}>
               {salvandoEdit ? 'Salvando...' : '✅ Salvar alterações'}
             </button>
