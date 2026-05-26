@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, useNavigate, Navigate } from 'react-router-dom'
-import { Home, Search, Lock, LogOut, Activity, Users, Bell, X, Send } from 'lucide-react'
+import { Home, Search, Lock, LogOut, Activity, Users, Bell, X, Send, BarChart2 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import Formulario from './pages/Formulario'
 import Consulta from './pages/Consulta'
@@ -9,13 +9,14 @@ import Login from './pages/Login'
 import Sequor from './pages/Sequor'
 import Laser from './pages/Laser'
 import Equipe from './pages/Equipe'
+import Indicadores from './pages/Indicadores'
 import './App.css'
 
 const SENHA_APP = import.meta.env.VITE_APP_KEY
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 const VICTOR_WHATSAPP = '5519987556217'
-const TELAS = ['Início', 'Sequor', 'Laser', 'Consultar', 'Equipe', 'Admin', 'Outro']
+const TELAS = ['Início', 'Sequor', 'Laser', 'Consultar', 'Equipe', 'Indicadores', 'Admin', 'Outro']
 const SESSAO_DURACAO = 8 * 60 * 60 * 1000
 
 function Manutencao({ onSenha }) {
@@ -60,12 +61,8 @@ function Manutencao({ onSenha }) {
         borderRadius: 16, display: 'flex', alignItems: 'center',
         justifyContent: 'center', fontSize: 26, marginBottom: 20
       }}>⚙️</div>
-      <h1 style={{ fontFamily: 'monospace', fontSize: 22, color: 'var(--accent)', marginBottom: 6 }}>
-        CCS TEC
-      </h1>
-      <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 32, textAlign: 'center' }}>
-        Sistema de gestão de produção
-      </p>
+      <h1 style={{ fontFamily: 'monospace', fontSize: 22, color: 'var(--accent)', marginBottom: 6 }}>CCS TEC</h1>
+      <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 32, textAlign: 'center' }}>Sistema de gestão de produção</p>
       <div style={{ width: '100%', maxWidth: 340 }}>
         <div className="card">
           <div className="field">
@@ -181,7 +178,6 @@ function Layout({ usuario, onLogout }) {
 
       const msg = `💬 *Chat CCS Tec*\n\n*OP:* ${chatAberto.ordem}\n*Item:* ${chatAberto.item}\n*${usuario.nome}:* ${novaMensagem}`
 
-      // Notifica todos os participantes
       const participantes = chatAberto.participantes || []
       if (participantes.length > 0) {
         const { data: users } = await supabase
@@ -201,7 +197,6 @@ function Layout({ usuario, onLogout }) {
         }
       }
 
-      // Victor sempre recebe
       await fetch(`${SUPABASE_URL}/functions/v1/enviar-whatsapp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
@@ -304,6 +299,7 @@ function Layout({ usuario, onLogout }) {
           <Route path="/laser" element={<Laser usuario={usuario} />} />
           <Route path="/consulta" element={<Consulta />} />
           <Route path="/equipe" element={<Equipe usuario={usuario} />} />
+          <Route path="/indicadores" element={<Indicadores usuario={usuario} />} />
           <Route path="/admin" element={<Admin usuario={usuario} />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
@@ -494,6 +490,12 @@ function Layout({ usuario, onLogout }) {
           <Search size={22} />
           <span>Consultar</span>
         </NavLink>
+        {isLiderOuMais && (
+          <NavLink to="/indicadores" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+            <BarChart2 size={22} />
+            <span>Indicadores</span>
+          </NavLink>
+        )}
         {isLiderOuMais && (
           <NavLink to="/equipe" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
             <Users size={22} />
