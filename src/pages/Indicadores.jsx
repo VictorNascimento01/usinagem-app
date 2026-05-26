@@ -2,6 +2,20 @@ import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
+// Capacidade de cada turno em minutos
+const TURNOS = {
+  '1': { label: '1º Turno', min: 588, cor: 'var(--accent)', inicio: '07:00', fim: '16:48' },
+  '2': { label: '2º Turno', min: 561, cor: 'var(--yellow)', inicio: '16:48', fim: '02:09' },
+  '3': { label: '3º Turno', min: 531, cor: '#7c3aed', inicio: '02:09', fim: '07:00' },
+}
+
+const TOTAL_DIA = TURNOS['1'].min + TURNOS['2'].min + TURNOS['3'].min // 1680 min = 28h
+
+const CORES_JOBS = [
+  '#00e5ff', '#00ff88', '#ffd60a', '#ff6b35', '#7c3aed',
+  '#ff3d5a', '#06d6a0', '#f72585', '#4361ee', '#4cc9f0'
+]
+
 function formatarTempo(minutos) {
   if (!minutos || minutos <= 0) return '—'
   const h = Math.floor(minutos / 60)
@@ -69,6 +83,194 @@ function Modal({ titulo, subtitulo, onClose, children }) {
   )
 }
 
+// Gráfico vertical de carga máquina
+function GraficoCargaMaquina({ maquina, jobs }) {
+  const ALTURA = 320 // px total do gráfico
+  const T1_MIN = TURNOS['1'].min
+  const T2_MIN = TURNOS['2'].min
+  const T3_MIN = TURNOS['3'].min
+
+  // Total de minutos programados para essa máquina
+  const totalMin = jobs.reduce((s, j) => s + (j.tempoTotalJob || 0), 0)
+  const maxMin = TOTAL_DIA
+  const escala = ALTURA / maxMin // px por minuto
+
+  // Posições das linhas de turno (de baixo pra cima)
+  const posT1 = T1_MIN * escala        // fim do T1
+  const posT2 = (T1_MIN + T2_MIN) * escala  // fim do T2
+  const posT3 = maxMin * escala         // fim do T3
+
+  // Cor por job
+  const jobCores = {}
+  jobs.forEach((j, i) => { jobCores[j.id] = CORES_JOBS[i % CORES_JOBS.length] })
+
+  // Monta segmentos de barras (de baixo pra cima)
+  let acumulado = 0
+  const segmentos = jobs.map(j => {
+    const tempo = j.tempoTotalJob || 0
+    const inicio = acumulado
+    acumulado += tempo
+    return { job: j, inicio, fim: acumulado, tempo }
+  })
+
+  const pctUsado = Math.round((totalMin / maxMin) * 100)
+  const corPct = pctUsado > 100 ? 'var(--red)' : pctUsado > 80 ? 'var(--yellow)' : 'var(--green)'
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--yellow)' }} />
+        <div style={{ fontFamily: 'monospace', fontSize: 15, fontWeight: 700, color: 'var(--yellow)', flex: 1 }}>
+          {maquina.toUpperCase()}
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontFamily: 'monospace', fontSize: 16, fontWeight: 700, color: corPct }}>{pctUsado}%</div>
+          <div style={{ fontSize: 10, color: 'var(--muted)' }}>{formatarTempo(totalMin)} / {formatarTempo(maxMin)}</div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+        {/* Eixo Y com labels de tempo */}
+        <div style={{ position: 'relative', height: ALTURA, width: 36, flexShrink: 0 }}>
+          {/* Labels dos turnos */}
+          {[
+            { pos: 0, label: '0h' },
+            { pos: posT1, label: '9h48' },
+            { pos: posT2, label: '19h09' },
+            { pos: posT3, label: '28h' },
+          ].map(({ pos, label }) => (
+            <div key={label} style={{
+              position: 'absolute', bottom: pos,
+              fontSize: 9, color: 'var(--muted)',
+              transform: 'translateY(50%)',
+              right: 4, textAlign: 'right', whiteSpace: 'nowrap'
+            }}>{label}</div>
+          ))}
+        </div>
+
+        {/* Gráfico */}
+        <div style={{ position: 'relative', height: ALTURA, flex: 1 }}>
+
+          {/* Linhas tracejadas dos turnos */}
+          {[
+            { pos: posT1, cor: TURNOS['1'].cor, label: TURNOS['1'].label },
+            { pos: posT2, cor: TURNOS['2'].cor, label: TURNOS['2'].label },
+            { pos: posT3, cor: TURNOS['3'].cor, label: TURNOS['3'].label },
+          ].map(({ pos, cor, label }) => (
+            <div key={label} style={{
+              position: 'absolute', bottom: pos, left: 0, right: 0,
+              borderTop: `1.5px dashed ${cor}`,
+              zIndex: 2
+            }}>
+              <span style={{
+                position: 'absolute', right: 0, top: -16,
+                fontSize: 9, color: cor, fontWeight: 700,
+                background: 'var(--surface)', padding: '0 3px'
+              }}>{label}</span>
+            </div>
+          ))}
+
+          {/* Área de fundo dos turnos */}
+          <div style={{
+            position: 'absolute', bottom: 0, left: 0, right: 0,
+            height: posT1, background: `${TURNOS['1'].cor}08`,
+            borderLeft: `2px solid ${TURNOS['1'].cor}33`
+          }} />
+          <div style={{
+            position: 'absolute', bottom: posT1, left: 0, right: 0,
+            height: posT2 - posT1, background: `${TURNOS['2'].cor}08`,
+            borderLeft: `2px solid ${TURNOS['2'].cor}33`
+          }} />
+          <div style={{
+            position: 'absolute', bottom: posT2, left: 0, right: 0,
+            height: posT3 - posT2, background: `${'#7c3aed'}08`,
+            borderLeft: `2px solid ${'#7c3aed'}33`
+          }} />
+
+          {/* Barras dos jobs */}
+          {segmentos.map(({ job, inicio, fim, tempo }) => {
+            const bottom = inicio * escala
+            const height = Math.max(tempo * escala, 4)
+            const cor = jobCores[job.id]
+            const extrapolou = fim > maxMin
+
+            return (
+              <div key={job.id} style={{
+                position: 'absolute',
+                bottom, left: 8, right: 8,
+                height,
+                background: extrapolou ? 'var(--red)' : cor,
+                borderRadius: 4,
+                zIndex: 3,
+                opacity: 0.85,
+                display: 'flex', alignItems: 'center',
+                padding: '0 6px',
+                overflow: 'hidden'
+              }}>
+                {height > 18 && (
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, color: '#000',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                  }}>
+                    {job.job} · {formatarTempo(tempo)}
+                  </span>
+                )}
+              </div>
+            )
+          })}
+
+          {/* Indicador de overflow */}
+          {totalMin > maxMin && (
+            <div style={{
+              position: 'absolute', top: -24, left: 0, right: 0,
+              background: 'rgba(255,61,90,.15)', border: '1px solid rgba(255,61,90,.4)',
+              borderRadius: 6, padding: '3px 8px',
+              fontSize: 10, color: 'var(--red)', fontWeight: 700, textAlign: 'center'
+            }}>
+              ⚠️ Excede capacidade diária em {formatarTempo(totalMin - maxMin)}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Legenda */}
+      <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {jobs.map(j => (
+          <div key={j.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <div style={{ width: 10, height: 10, borderRadius: 2, background: jobCores[j.id], flexShrink: 0 }} />
+            <span style={{ fontSize: 10, color: 'var(--muted)' }}>{j.job} ({formatarTempo(j.tempoTotalJob || 0)})</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Resumo por turno */}
+      <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+        {['1', '2', '3'].map(t => {
+          const capMin = TURNOS[t].min
+          const usadoMin = Math.min(totalMin, capMin)
+          const pct = Math.round((usadoMin / capMin) * 100)
+          return (
+            <div key={t} style={{
+              background: 'var(--surface2)', borderRadius: 8, padding: '8px',
+              border: `1px solid ${TURNOS[t].cor}33`
+            }}>
+              <div style={{ fontSize: 9, color: TURNOS[t].cor, fontWeight: 700, marginBottom: 4 }}>
+                {TURNOS[t].label}
+              </div>
+              <div style={{ height: 4, background: 'var(--surface)', borderRadius: 99, overflow: 'hidden', marginBottom: 4 }}>
+                <div style={{ height: '100%', width: `${Math.min(pct, 100)}%`, background: TURNOS[t].cor, borderRadius: 99 }} />
+              </div>
+              <div style={{ fontSize: 9, color: 'var(--muted)' }}>
+                {pct > 100 ? '🔴 Cheio' : pct > 80 ? '🟡 Quase' : `🟢 ${100 - pct}% livre`}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function Indicadores({ usuario }) {
   const [planejamentos, setPlanejamentos] = useState([])
   const [apontamentos, setApontamentos] = useState([])
@@ -76,8 +278,9 @@ export default function Indicadores({ usuario }) {
   const [loading, setLoading] = useState(true)
   const [agora, setAgora] = useState(new Date())
   const [planta, setPlanta] = useState(usuario?.estab === 'todas' ? '' : usuario?.estab || '')
-  const [modal, setModal] = useState(null) // 'chapas' | 'qualidade' | 'maquina' | 'usinagem' | 'pendentes' | 'finalizados'
+  const [modal, setModal] = useState(null)
   const [modalData, setModalData] = useState(null)
+  const [abaIndicador, setAbaIndicador] = useState('geral')
 
   useEffect(() => {
     carregarDados()
@@ -124,20 +327,25 @@ export default function Indicadores({ usuario }) {
   const lancamentosPorTurno = { '1': 0, '2': 0, '3': 0 }
   lancamentos.forEach(l => { if (l.turno) lancamentosPorTurno[l.turno] += (l.quantidade || 0) })
 
+  // Agrupa por máquina e calcula tempo total por job
   const porMaquina = {}
   pendentes.forEach(p => {
     const maq = p.maquina || '—'
     if (!porMaquina[maq]) porMaquina[maq] = []
-    porMaquina[maq].push(p)
+
+    // Calcula tempo total do job pelos CNCs
+    let tempoTotalJob = 0
+    if (p.cncs && p.cncs.length > 0) {
+      tempoTotalJob = p.cncs.reduce((s, c) => s + (c.tempoTotal || 0), 0)
+    } else if (p.tempo_chapa) {
+      tempoTotalJob = (p.chapas_cortar || p.total_chapas || 0) * p.tempo_chapa
+    }
+
+    porMaquina[maq].push({ ...p, tempoTotalJob })
   })
 
   const corQ = (q) => q === null ? 'var(--muted)' : q >= 95 ? 'var(--green)' : q >= 80 ? 'var(--yellow)' : 'var(--red)'
   const corP = (pct) => pct >= 80 ? 'var(--green)' : pct >= 40 ? 'var(--accent)' : 'var(--yellow)'
-
-  function abrirModalMaquina(maquina, jobs) {
-    setModalData({ maquina, jobs })
-    setModal('maquina')
-  }
 
   function abrirModalQualidade() {
     const porJob = apontamentos.reduce((acc, a) => {
@@ -181,7 +389,7 @@ export default function Indicadores({ usuario }) {
       </div>
 
       {usuario?.estab === 'todas' && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           {[
             { key: '', label: '🏭 Todas' },
             { key: '100', label: '📍 Limeira' },
@@ -198,244 +406,173 @@ export default function Indicadores({ usuario }) {
         </div>
       )}
 
-      {/* ⚡ LASER */}
-      <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
-        ⚡ Laser — hoje
-      </div>
-
-      {/* Cards clicáveis */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 }}>
+      {/* Sub-abas */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         {[
-          { label: 'Pendentes', valor: pendentes.length, cor: pendentes.length > 0 ? 'var(--yellow)' : 'var(--green)', onClick: () => { setModalData(pendentes); setModal('pendentes') } },
-          { label: 'Finalizados', valor: finalizados.length, cor: 'var(--green)', onClick: () => { setModalData(finalizados); setModal('finalizados') } },
-          { label: 'Jobs hoje', valor: planejamentos.length, cor: 'var(--accent)', onClick: () => { setModalData(planejamentos); setModal('todos') } },
-        ].map(({ label, valor, cor, onClick }) => (
-          <div key={label} onClick={onClick} className="card" style={{ padding: 12, textAlign: 'center', marginBottom: 0, cursor: 'pointer', transition: 'opacity .2s' }}
-            onMouseDown={e => e.currentTarget.style.opacity = '.7'}
-            onMouseUp={e => e.currentTarget.style.opacity = '1'}
-            onTouchStart={e => e.currentTarget.style.opacity = '.7'}
-            onTouchEnd={e => e.currentTarget.style.opacity = '1'}>
-            <div style={{ fontSize: 9, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{label}</div>
-            <div style={{ fontFamily: 'monospace', fontSize: 24, fontWeight: 700, color: cor }}>{valor}</div>
-            <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 4 }}>ver detalhes ›</div>
-          </div>
+          { key: 'geral', label: '📈 Geral' },
+          { key: 'carga', label: '🖨️ Carga Máquina' },
+        ].map(({ key, label }) => (
+          <button key={key} onClick={() => setAbaIndicador(key)} style={{
+            flex: 1, padding: '10px 4px', border: '1px solid',
+            borderColor: abaIndicador === key ? '#7c3aed' : 'var(--border)',
+            background: abaIndicador === key ? 'rgba(124,58,237,.1)' : 'var(--surface)',
+            color: abaIndicador === key ? '#7c3aed' : 'var(--muted)',
+            borderRadius: 10, fontWeight: 700, fontSize: 12, cursor: 'pointer'
+          }}>{label}</button>
         ))}
       </div>
 
-      {/* Gauges */}
-      {(totalChapasPlanejadasHoje > 0 || qualidadeLaser !== null) && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap', gap: 16, padding: '8px 0' }}>
-            {totalChapasPlanejadasHoje > 0 && (
-              <GaugeCircular
-                valor={totalChapasFeitas}
-                max={totalChapasPlanejadasHoje}
-                cor={corP(pctChapas)}
-                label="Chapas cortadas"
-                sublabel={`${totalChapasFeitas}/${totalChapasPlanejadasHoje}`}
-                onClick={() => { setModalData(planejamentos); setModal('chapas') }}
-              />
-            )}
-            {qualidadeLaser !== null && (
-              <GaugeCircular
-                valor={qualidadeLaser}
-                max={100}
-                cor={corQ(qualidadeLaser)}
-                label="Qualidade laser"
-                sublabel={qualidadeLaser >= 95 ? 'Excelente' : qualidadeLaser >= 80 ? 'Atenção' : 'Abaixo'}
-                onClick={abrirModalQualidade}
-              />
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Máquinas em operação */}
-      {Object.keys(porMaquina).length > 0 && (
+      {/* ABA GERAL */}
+      {abaIndicador === 'geral' && (
         <>
-          <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
-            🖨️ Máquinas em operação
+          <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
+            ⚡ Laser — hoje
           </div>
-          {Object.entries(porMaquina).map(([maquina, jobs]) => {
-            const totalChapas = jobs.reduce((s, j) => s + (j.chapas_cortar || j.total_chapas || 0), 0)
-            const feitas = jobs.reduce((s, j) => s + (j.chapas_feitas || 0), 0)
-            const pct = totalChapas > 0 ? Math.round((feitas / totalChapas) * 100) : 0
-            let tempoTotal = 0
-            let temTempo = true
-            jobs.forEach(j => {
-              const rest = (j.chapas_cortar || j.total_chapas || 0) - (j.chapas_feitas || 0)
-              if (j.tempo_chapa) tempoTotal += rest * j.tempo_chapa
-              else temTempo = false
-            })
-            const previsao = temTempo && tempoTotal > 0 ? previsaoTermino(tempoTotal) : null
 
-            return (
-              <div key={maquina} onClick={() => abrirModalMaquina(maquina, jobs)} className="card" style={{ marginBottom: 10, cursor: 'pointer' }}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 }}>
+            {[
+              { label: 'Pendentes', valor: pendentes.length, cor: pendentes.length > 0 ? 'var(--yellow)' : 'var(--green)', onClick: () => { setModalData(pendentes); setModal('pendentes') } },
+              { label: 'Finalizados', valor: finalizados.length, cor: 'var(--green)', onClick: () => { setModalData(finalizados); setModal('finalizados') } },
+              { label: 'Jobs hoje', valor: planejamentos.length, cor: 'var(--accent)', onClick: () => { setModalData(planejamentos); setModal('todos') } },
+            ].map(({ label, valor, cor, onClick }) => (
+              <div key={label} onClick={onClick} className="card" style={{ padding: 12, textAlign: 'center', marginBottom: 0, cursor: 'pointer' }}
                 onMouseDown={e => e.currentTarget.style.opacity = '.7'}
                 onMouseUp={e => e.currentTarget.style.opacity = '1'}
                 onTouchStart={e => e.currentTarget.style.opacity = '.7'}
                 onTouchEnd={e => e.currentTarget.style.opacity = '1'}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--yellow)', flexShrink: 0 }} />
-                  <div style={{ fontFamily: 'monospace', fontSize: 15, fontWeight: 700, color: 'var(--yellow)', flex: 1 }}>{maquina.toUpperCase()}</div>
-                  <div style={{ textAlign: 'right' }}>
-                    {previsao && <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--green)' }}>🏁 {previsao}</div>}
-                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>{jobs.length} job(s)</div>
-                  </div>
-                  <div style={{ fontSize: 16, color: 'var(--muted)' }}>›</div>
-                </div>
+                <div style={{ fontSize: 9, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{label}</div>
+                <div style={{ fontFamily: 'monospace', fontSize: 24, fontWeight: 700, color: cor }}>{valor}</div>
+                <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 4 }}>ver ›</div>
+              </div>
+            ))}
+          </div>
 
-                {/* Barra de progresso */}
-                <div style={{ marginBottom: 6 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>
-                    <span>{feitas}/{totalChapas} chapas</span>
-                    <span style={{ color: corP(pct), fontWeight: 700 }}>{pct}%</span>
-                  </div>
-                  <div style={{ height: 8, background: 'var(--surface2)', borderRadius: 99, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${pct}%`, background: corP(pct), borderRadius: 99, transition: 'width .3s' }} />
-                  </div>
-                </div>
-
-                {temTempo && tempoTotal > 0 && (
-                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>⏱️ {formatarTempo(tempoTotal)} restante</div>
+          {(totalChapasPlanejadasHoje > 0 || qualidadeLaser !== null) && (
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap', gap: 16, padding: '8px 0' }}>
+                {totalChapasPlanejadasHoje > 0 && (
+                  <GaugeCircular
+                    valor={totalChapasFeitas}
+                    max={totalChapasPlanejadasHoje}
+                    cor={corP(pctChapas)}
+                    label="Chapas cortadas"
+                    sublabel={`${totalChapasFeitas}/${totalChapasPlanejadasHoje}`}
+                    onClick={() => { setModalData(planejamentos); setModal('chapas') }}
+                  />
+                )}
+                {qualidadeLaser !== null && (
+                  <GaugeCircular
+                    valor={qualidadeLaser}
+                    max={100}
+                    cor={corQ(qualidadeLaser)}
+                    label="Qualidade laser"
+                    sublabel={qualidadeLaser >= 95 ? 'Excelente' : qualidadeLaser >= 80 ? 'Atenção' : 'Abaixo'}
+                    onClick={abrirModalQualidade}
+                  />
                 )}
               </div>
-            )
-          })}
+            </div>
+          )}
+
+          {planejamentos.length === 0 && (
+            <div className="empty" style={{ marginBottom: 16 }}>
+              <div className="emoji">⚡</div>
+              <h3>Sem dados laser hoje</h3>
+            </div>
+          )}
+
+          <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12, marginTop: 8 }}>
+            ⚙️ Usinagem — hoje
+          </div>
+
+          {lancamentos.length === 0 ? (
+            <div className="empty">
+              <div className="emoji">⚙️</div>
+              <h3>Sem lançamentos hoje</h3>
+            </div>
+          ) : (
+            <div onClick={() => { setModalData(lancamentos); setModal('usinagem') }} className="card" style={{ marginBottom: 16, cursor: 'pointer' }}
+              onMouseDown={e => e.currentTarget.style.opacity = '.7'}
+              onMouseUp={e => e.currentTarget.style.opacity = '1'}
+              onTouchStart={e => e.currentTarget.style.opacity = '.7'}
+              onTouchEnd={e => e.currentTarget.style.opacity = '1'}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Total de peças lançadas</div>
+                  <div style={{ fontFamily: 'monospace', fontSize: 36, fontWeight: 700, color: 'var(--accent)' }}>{totalPecasLancadas}</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>{lancamentos.length} lançamento(s) · ver detalhes ›</div>
+                </div>
+                <div style={{ fontSize: 24 }}>⚙️</div>
+              </div>
+              {['1', '2', '3'].map(t => {
+                const v = lancamentosPorTurno[t]
+                if (!v) return null
+                const pct = totalPecasLancadas > 0 ? Math.round((v / totalPecasLancadas) * 100) : 0
+                const cores = { '1': 'var(--accent)', '2': 'var(--yellow)', '3': '#7c3aed' }
+                const labels = { '1': '1º Turno', '2': '2º Turno', '3': '3º Turno' }
+                return (
+                  <div key={t} style={{ marginBottom: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 3 }}>
+                      <span style={{ color: 'var(--muted)' }}>{labels[t]}</span>
+                      <span style={{ color: cores[t], fontWeight: 700 }}>{v} pç · {pct}%</span>
+                    </div>
+                    <div style={{ height: 6, background: 'var(--surface2)', borderRadius: 99, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${pct}%`, background: cores[t], borderRadius: 99 }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </>
       )}
 
-      {planejamentos.length === 0 && (
-        <div className="empty" style={{ marginBottom: 16 }}>
-          <div className="emoji">⚡</div>
-          <h3>Sem dados laser hoje</h3>
-        </div>
-      )}
-
-      {/* ⚙️ USINAGEM */}
-      <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12, marginTop: 8 }}>
-        ⚙️ Usinagem — hoje
-      </div>
-
-      {lancamentos.length === 0 ? (
-        <div className="empty">
-          <div className="emoji">⚙️</div>
-          <h3>Sem lançamentos hoje</h3>
-        </div>
-      ) : (
-        <div onClick={() => { setModalData(lancamentos); setModal('usinagem') }} className="card" style={{ marginBottom: 16, cursor: 'pointer' }}
-          onMouseDown={e => e.currentTarget.style.opacity = '.7'}
-          onMouseUp={e => e.currentTarget.style.opacity = '1'}
-          onTouchStart={e => e.currentTarget.style.opacity = '.7'}
-          onTouchEnd={e => e.currentTarget.style.opacity = '1'}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Total de peças lançadas</div>
-              <div style={{ fontFamily: 'monospace', fontSize: 36, fontWeight: 700, color: 'var(--accent)' }}>{totalPecasLancadas}</div>
-              <div style={{ fontSize: 12, color: 'var(--muted)' }}>{lancamentos.length} lançamento(s) · ver detalhes ›</div>
-            </div>
-            <div style={{ fontSize: 24 }}>⚙️</div>
+      {/* ABA CARGA MÁQUINA */}
+      {abaIndicador === 'carga' && (
+        <>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>
+            Cada barra representa um job. As linhas tracejadas marcam os limites de cada turno.
           </div>
 
-          {/* Mini barras por turno */}
-          {['1', '2', '3'].map(t => {
-            const v = lancamentosPorTurno[t]
-            if (!v) return null
-            const pct = totalPecasLancadas > 0 ? Math.round((v / totalPecasLancadas) * 100) : 0
-            const cores = { '1': 'var(--accent)', '2': 'var(--yellow)', '3': '#7c3aed' }
-            const labels = { '1': '1º Turno', '2': '2º Turno', '3': '3º Turno' }
-            return (
-              <div key={t} style={{ marginBottom: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 3 }}>
-                  <span style={{ color: 'var(--muted)' }}>{labels[t]}</span>
-                  <span style={{ color: cores[t], fontWeight: 700 }}>{v} pç · {pct}%</span>
-                </div>
-                <div style={{ height: 6, background: 'var(--surface2)', borderRadius: 99, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${pct}%`, background: cores[t], borderRadius: 99 }} />
-                </div>
+          {/* Legenda turnos */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+            {['1', '2', '3'].map(t => (
+              <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ width: 16, height: 2, borderTop: `2px dashed ${TURNOS[t].cor}` }} />
+                <span style={{ fontSize: 10, color: TURNOS[t].cor, fontWeight: 700 }}>
+                  {TURNOS[t].label} ({formatarTempo(TURNOS[t].min)})
+                </span>
               </div>
-            )
-          })}
-        </div>
+            ))}
+          </div>
+
+          {Object.keys(porMaquina).length === 0 ? (
+            <div className="empty">
+              <div className="emoji">🖨️</div>
+              <h3>Sem jobs pendentes</h3>
+              <p>Nenhuma máquina em operação hoje</p>
+            </div>
+          ) : (
+            Object.entries(porMaquina).map(([maquina, jobs]) => (
+              <GraficoCargaMaquina key={maquina} maquina={maquina} jobs={jobs} />
+            ))
+          )}
+        </>
       )}
 
       {/* MODAIS */}
-
-      {/* Modal máquina */}
-      {modal === 'maquina' && modalData && (
-        <Modal titulo={`${modalData.maquina.toUpperCase()} — Jobs em andamento`} subtitulo={`${modalData.jobs.length} job(s) na fila`} onClose={() => setModal(null)}>
-          {modalData.jobs.map((job, idx) => {
-            const chapas = job.chapas_cortar || job.total_chapas || 0
-            const feitas = job.chapas_feitas || 0
-            const restantes = chapas - feitas
-            const tempo = job.tempo_chapa ? restantes * job.tempo_chapa : null
-            const prev = tempo ? previsaoTermino(tempo) : null
-            const pct = chapas > 0 ? Math.round((feitas / chapas) * 100) : 0
-
-            return (
-              <div key={job.id} style={{
-                padding: '14px', marginBottom: 10,
-                background: idx === 0 ? 'rgba(0,229,255,.05)' : 'var(--surface2)',
-                border: `1px solid ${idx === 0 ? 'rgba(0,229,255,.2)' : 'var(--border)'}`,
-                borderRadius: 12
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <div style={{
-                    width: 24, height: 24, borderRadius: '50%',
-                    background: idx === 0 ? 'var(--accent)' : 'var(--surface)',
-                    border: `2px solid ${idx === 0 ? 'var(--accent)' : 'var(--border)'}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontFamily: 'monospace', fontSize: 11, fontWeight: 700,
-                    color: idx === 0 ? '#000' : 'var(--muted)', flexShrink: 0
-                  }}>{idx + 1}</div>
-                  <div style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, flex: 1 }}>{job.job}</div>
-                  {idx === 0 && <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 700 }}>▶ Cortando</span>}
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>
-                  <span>{feitas}/{chapas} chapas</span>
-                  <span style={{ color: corP(pct), fontWeight: 700 }}>{pct}%</span>
-                </div>
-                <div style={{ height: 10, background: 'var(--surface)', borderRadius: 99, overflow: 'hidden', marginBottom: 8 }}>
-                  <div style={{ height: '100%', width: `${pct}%`, background: idx === 0 ? 'var(--accent)' : 'var(--muted)', borderRadius: 99 }} />
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <div style={{ background: 'var(--surface)', borderRadius: 8, padding: '8px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 2 }}>Tempo restante</div>
-                    <div style={{ fontFamily: 'monospace', fontSize: 16, fontWeight: 700, color: 'var(--accent)' }}>{tempo ? formatarTempo(tempo) : '—'}</div>
-                  </div>
-                  <div style={{ background: 'var(--surface)', borderRadius: 8, padding: '8px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 2 }}>Previsão término</div>
-                    <div style={{ fontFamily: 'monospace', fontSize: 16, fontWeight: 700, color: 'var(--green)' }}>{prev || '—'}</div>
-                  </div>
-                </div>
-
-                {job.tempo_chapa && (
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>
-                    ⏱️ {formatarTempo(job.tempo_chapa)}/chapa · {nomeTurno(job.turno)}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </Modal>
-      )}
-
-      {/* Modal qualidade */}
       {modal === 'qualidade' && modalData && (
         <Modal titulo="Qualidade Laser" subtitulo="Apontamentos de hoje" onClose={() => setModal(null)}>
           <div style={{ textAlign: 'center', marginBottom: 20 }}>
             <div style={{ fontFamily: 'monospace', fontSize: 48, fontWeight: 700, color: corQ(qualidadeLaser) }}>{qualidadeLaser}%</div>
-            <div style={{ fontSize: 13, color: 'var(--muted)' }}>{modalData.total.real} pç produzidas de {modalData.total.planejado} pç planejadas</div>
+            <div style={{ fontSize: 13, color: 'var(--muted)' }}>{modalData.total.real} pç de {modalData.total.planejado} pç planejadas</div>
             <div style={{ height: 12, background: 'var(--surface2)', borderRadius: 99, overflow: 'hidden', margin: '12px 0' }}>
               <div style={{ height: '100%', width: `${qualidadeLaser}%`, background: corQ(qualidadeLaser), borderRadius: 99 }} />
             </div>
             <div style={{ fontSize: 12, fontWeight: 700, color: corQ(qualidadeLaser) }}>
-              {qualidadeLaser >= 95 ? '🟢 Excelente — acima de 95%' : qualidadeLaser >= 80 ? '🟡 Atenção — entre 80% e 95%' : '🔴 Abaixo do esperado — menos de 80%'}
+              {qualidadeLaser >= 95 ? '🟢 Excelente' : qualidadeLaser >= 80 ? '🟡 Atenção' : '🔴 Abaixo do esperado'}
             </div>
           </div>
-
           <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Por job</div>
           {Object.entries(modalData.porJob).map(([job, dados]) => {
             const q = dados.planejado > 0 ? Math.round((dados.real / dados.planejado) * 100) : 0
@@ -448,22 +585,13 @@ export default function Indicadores({ usuario }) {
                 <div style={{ height: 8, background: 'var(--surface)', borderRadius: 99, overflow: 'hidden', marginBottom: 6 }}>
                   <div style={{ height: '100%', width: `${q}%`, background: corQ(q), borderRadius: 99 }} />
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-                  🖨️ {dados.maquina} · {dados.real}/{dados.planejado} pç
-                </div>
-                {dados.itens.map((item, i) => (
-                  <div key={i} style={{ marginTop: 8, padding: '6px 8px', background: 'var(--surface)', borderRadius: 6, fontSize: 11 }}>
-                    <div style={{ fontFamily: 'monospace', fontWeight: 700 }}>{item.item_ccs}</div>
-                    <div style={{ color: 'var(--muted)', marginTop: 2 }}>Real: {item.qtd_real} · Planejado: {item.qtd_planejada}</div>
-                  </div>
-                ))}
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>🖨️ {dados.maquina} · {dados.real}/{dados.planejado} pç</div>
               </div>
             )
           })}
         </Modal>
       )}
 
-      {/* Modal lista de jobs */}
       {(modal === 'pendentes' || modal === 'finalizados' || modal === 'todos' || modal === 'chapas') && modalData && (
         <Modal
           titulo={modal === 'pendentes' ? '⏳ Jobs pendentes' : modal === 'finalizados' ? '✅ Jobs finalizados' : modal === 'chapas' ? '📊 Progresso chapas' : '📋 Todos os jobs'}
@@ -476,7 +604,10 @@ export default function Indicadores({ usuario }) {
             const chapas = p.chapas_cortar || p.total_chapas || 0
             const feitas = p.chapas_feitas || 0
             const pct = chapas > 0 ? Math.round((feitas / chapas) * 100) : 0
-            const tempoRest = p.tempo_chapa ? (chapas - feitas) * p.tempo_chapa : null
+            const tempoTotalJob = p.cncs?.length > 0
+              ? p.cncs.reduce((s, c) => s + (c.tempoTotal || 0), 0)
+              : p.tempo_chapa ? chapas * p.tempo_chapa : null
+            const tempoRest = tempoTotalJob ? Math.round(tempoTotalJob * (1 - feitas / chapas)) : null
             const prev = tempoRest ? previsaoTermino(tempoRest) : null
 
             return (
@@ -489,9 +620,7 @@ export default function Indicadores({ usuario }) {
                     color: p.finalizado ? 'var(--green)' : '#ff6b35'
                   }}>{p.finalizado ? '✅ Finalizado' : '⏳ Pendente'}</span>
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>
-                  🖨️ {p.maquina} · {nomeTurno(p.turno)}
-                </div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>🖨️ {p.maquina}</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>
                   <span>{feitas}/{chapas} chapas</span>
                   <span style={{ color: corP(pct), fontWeight: 700 }}>{pct}%</span>
@@ -499,25 +628,19 @@ export default function Indicadores({ usuario }) {
                 <div style={{ height: 8, background: 'var(--surface)', borderRadius: 99, overflow: 'hidden', marginBottom: 6 }}>
                   <div style={{ height: '100%', width: `${pct}%`, background: corP(pct), borderRadius: 99 }} />
                 </div>
-                {tempoRest !== null && (
-                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-                    ⏱️ {formatarTempo(tempoRest)} restante {prev ? `· 🏁 ${prev}` : ''}
-                  </div>
-                )}
+                {tempoTotalJob && <div style={{ fontSize: 11, color: 'var(--muted)' }}>⏱️ Total: {formatarTempo(tempoTotalJob)}{prev ? ` · 🏁 ${prev}` : ''}</div>}
               </div>
             )
           })}
         </Modal>
       )}
 
-      {/* Modal usinagem */}
       {modal === 'usinagem' && modalData && (
         <Modal titulo="⚙️ Lançamentos Usinagem" subtitulo={`${modalData.length} lançamento(s) hoje`} onClose={() => setModal(null)}>
           <div style={{ textAlign: 'center', marginBottom: 16 }}>
             <div style={{ fontFamily: 'monospace', fontSize: 40, fontWeight: 700, color: 'var(--accent)' }}>{totalPecasLancadas}</div>
             <div style={{ fontSize: 13, color: 'var(--muted)' }}>peças lançadas hoje</div>
           </div>
-
           <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Por turno</div>
           {['1', '2', '3'].map(t => {
             const v = lancamentosPorTurno[t]
@@ -537,7 +660,6 @@ export default function Indicadores({ usuario }) {
               </div>
             )
           })}
-
           <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, margin: '16px 0 10px' }}>Lançamentos</div>
           {modalData.map((l, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
@@ -554,19 +676,4 @@ export default function Indicadores({ usuario }) {
       )}
     </div>
   )
-}
-
-function nomeTurno(t) {
-  if (t === '1') return '1º Turno'
-  if (t === '2') return '2º Turno'
-  if (t === '3') return '3º Turno'
-  return t || '—'
-}
-
-function corP(pct) {
-  return pct >= 80 ? 'var(--green)' : pct >= 40 ? 'var(--accent)' : 'var(--yellow)'
-}
-
-function corQ(q) {
-  return q === null ? 'var(--muted)' : q >= 95 ? 'var(--green)' : q >= 80 ? 'var(--yellow)' : 'var(--red)'
 }

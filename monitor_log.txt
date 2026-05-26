@@ -415,3 +415,572 @@
 [25/05/2026 16:36:32] Enviando ordens... 29000/34199
 [25/05/2026 16:36:33] Enviando ordens... 30000/34199
 [25/05/2026 16:36:34] Enviando ordens... 31000/34199
+[25/05/2026 16:36:35] Enviando ordens... 32000/34199
+[25/05/2026 16:36:36] Enviando ordens... 33000/34199
+[25/05/2026 16:36:37] Enviando ordens... 34000/34199
+[25/05/2026 16:36:37] Enviando ordens... 34199/34199
+[25/05/2026 16:36:37] ✅ 34199 registros enviados para ordens!
+[25/05/2026 16:36:37] Sem mudança nos apontamentos
+[25/05/2026 17:40:42] 📄 CPCC detectado: CPCC0401.csv
+[25/05/2026 17:40:42] Atualizando ordens com CPCC0401.csv...
+[25/05/2026 17:40:44] 34148 ordens encontradas
+[25/05/2026 17:40:45] Tabela ordens limpa!
+[25/05/2026 17:40:47] Enviando ordens... 1000/34148
+[25/05/2026 17:40:48] Enviando ordens... 2000/34148
+[25/05/2026 17:40:50] Enviando ordens... 3000/34148
+[25/05/2026 17:40:50] Enviando ordens... 4000/34148
+[25/05/2026 17:40:51] Enviando ordens... 5000/34148
+[25/05/2026 17:40:52] Enviando ordens... 6000/34148
+[25/05/2026 17:40:53] Enviando ordens... 7000/34148
+[25/05/2026 17:40:55] Enviando ordens... 8000/34148
+[25/05/2026 17:40:57] Enviando ordens... 9000/34148
+[25/05/2026 17:40:58] Enviando ordens... 10000/34148
+[25/05/2026 17:40:59] Enviando ordens... 11000/34148
+[25/05/2026 17:41:00] Enviando ordens... 12000/34148
+[25/05/2026 17:41:00] Enviando ordens... 13000/34148
+[25/05/2026 17:41:01] Enviando ordens... 14000/34148
+[25/05/2026 17:41:02] Enviando ordens... 15000/34148
+[25/05/2026 17:41:04] Enviando ordens... 16000/34148
+[25/05/2026 17:41:05] Enviando ordens... 17000/34148
+[25/05/2026 17:41:06] Enviando ordens... 18000/34148
+[25/05/2026 17:41:07] Enviando ordens... 19000/34148
+[25/05/2026 17:41:08] Enviando ordens... 20000/34148
+[25/05/2026 17:41:09] Enviando ordens... 21000/34148
+[25/05/2026 17:41:10] Enviando ordens... 22000/34148
+[25/05/2026 17:41:10] Enviando ordens... 23000/34148
+[25/05/2026 17:41:11] Enviando ordens... 24000/34148
+[25/05/2026 17:41:12] Enviando ordens... 25000/34148
+[25/05/2026 17:41:13] Enviando ordens... 26000/34148
+[25/05/2026 17:41:14] Enviando ordens... 27000/34148
+[25/05/2026 17:41:15] Enviando ordens... 28000/34148
+[25/05/2026 17:41:16] Enviando ordens... 29000/34148
+[25/05/2026 17:41:17] Enviando ordens... 30000/34148
+[25/05/2026 17:41:18] Enviando ordens... 31000/34148
+[25/05/2026 17:41:19] Enviando ordens... 32000/34148
+[25/05/2026 17:41:20] Enviando ordens... 33000/34148
+[25/05/2026 17:41:21] Enviando ordens... 34000/34148
+[25/05/2026 17:41:21] Enviando ordens... 34148/34148
+[25/05/2026 17:41:21] ✅ 34148 registros enviados para ordens!
+[25/05/2026 17:41:21] Sem mudança nos apontamentos
+[25/05/2026 18:41:21] 📄 CPCC detectado: CPCC0401.csv
+[25/05/2026 18:41:21] Atualizando ordens com CPCC0401.csv...
+[25/05/2026 18:41:24] 34125 ordens encontradas
+[25/05/2026 18:41:25] Tabela ordens limpa!
+[25/05/2026 18:41:27] Enviando ordens... 1000/34125
+[25/05/2026 18:41:28] Enviando ordens... 2000/34125
+[25/05/2026 18:41:30] Enviando ordens... 3000/34125
+[25/05/2026 18:41:31] Enviando ordens... 4000/34125
+[25/05/2026 18:41:32] Enviando ordens... 5000/34125
+[25/05/2026 18:41:33] Enviando ordens... 6000/34125
+[25/05/2026 18:41:35] Enviando ordens... 7000/34125
+[25/05/2026 18:41:36] Enviando ordens... 8000/34125
+[25/05/2026 18:41:37] Enviando ordens... 9000/34125
+[25/05/2026 18:41:38] Enviando ordens... 10000/34125
+[25/05/2026 18:41:39] Enviando ordens... 11000/34125
+[25/05/2026 18:41:40] Enviando ordens... 12000/34125
+[25/05/2026 18:41:41] Enviando ordens... 13000/34125
+[25/05/2026 18:41:42] Enviando ordens... 14000/34125
+[25/05/2026 18:41:43] Enviando ordens... 15000/34125
+[25/05/2026 18:41:44] Enviando ordens... 16000/34125
+[25/05/2026 18:41:44] Enviando ordens... 17000/34125
+[25/05/2026 18:41:45] Enviando ordens... 18000/34125
+[25/05/2026 18:41:46] Enviando ordens... 19000/34125
+[25/05/2026 18:41:47] Enviando ordens... 20000/34125
+[25/05/2026 18:41:48] Enviando ordens... 21000/34125
+[25/05/2026 18:41:48] Enviando ordens... 22000/34125
+[25/05/2026 18:41:49] Enviando ordens... 23000/34125
+[25/05/2026 18:41:50] Enviando ordens... 24000/34125
+[25/05/2026 18:41:51] Enviando ordens... 25000/34125
+[25/05/2026 18:41:51] Enviando ordens... 26000/34125
+[25/05/2026 18:41:52] Enviando ordens... 27000/34125
+[25/05/2026 18:41:53] Enviando ordens... 28000/34125
+[25/05/2026 18:41:53] Enviando ordens... 29000/34125
+[25/05/2026 18:41:54] Enviando ordens... 30000/34125
+[25/05/2026 18:41:55] Enviando ordens... 31000/34125
+[25/05/2026 18:41:56] Enviando ordens... 32000/34125
+[25/05/2026 18:41:56] Enviando ordens... 33000/34125
+[25/05/2026 18:41:57] Enviando ordens... 34000/34125
+[25/05/2026 18:41:58] Enviando ordens... 34125/34125
+[25/05/2026 18:41:58] ✅ 34125 registros enviados para ordens!
+[25/05/2026 18:41:58] Sem mudança nos apontamentos
+[25/05/2026 19:41:58] 📄 CPCC detectado: CPCC0401.csv
+[25/05/2026 19:41:58] Atualizando ordens com CPCC0401.csv...
+[25/05/2026 19:42:00] 34101 ordens encontradas
+[25/05/2026 19:42:00] Tabela ordens limpa!
+[25/05/2026 19:42:02] Enviando ordens... 1000/34101
+[25/05/2026 19:42:04] Enviando ordens... 2000/34101
+[25/05/2026 19:42:05] Enviando ordens... 3000/34101
+[25/05/2026 19:42:06] Enviando ordens... 4000/34101
+[25/05/2026 19:42:07] Enviando ordens... 5000/34101
+[25/05/2026 19:42:09] Enviando ordens... 6000/34101
+[25/05/2026 19:42:10] Enviando ordens... 7000/34101
+[25/05/2026 19:42:11] Enviando ordens... 8000/34101
+[25/05/2026 19:42:11] Enviando ordens... 9000/34101
+[25/05/2026 19:42:12] Enviando ordens... 10000/34101
+[25/05/2026 19:42:13] Enviando ordens... 11000/34101
+[25/05/2026 19:42:14] Enviando ordens... 12000/34101
+[25/05/2026 19:42:15] Enviando ordens... 13000/34101
+[25/05/2026 19:42:16] Enviando ordens... 14000/34101
+[25/05/2026 19:42:17] Enviando ordens... 15000/34101
+[25/05/2026 19:42:18] Enviando ordens... 16000/34101
+[25/05/2026 19:42:19] Enviando ordens... 17000/34101
+[25/05/2026 19:42:20] Enviando ordens... 18000/34101
+[25/05/2026 19:42:22] Enviando ordens... 19000/34101
+[25/05/2026 19:42:22] Enviando ordens... 20000/34101
+[25/05/2026 19:42:23] Enviando ordens... 21000/34101
+[25/05/2026 19:42:24] Enviando ordens... 22000/34101
+[25/05/2026 19:42:25] Enviando ordens... 23000/34101
+[25/05/2026 19:42:26] Enviando ordens... 24000/34101
+[25/05/2026 19:42:27] Enviando ordens... 25000/34101
+[25/05/2026 19:42:28] Enviando ordens... 26000/34101
+[25/05/2026 19:42:29] Enviando ordens... 27000/34101
+[25/05/2026 19:42:30] Enviando ordens... 28000/34101
+[25/05/2026 19:42:31] Enviando ordens... 29000/34101
+[25/05/2026 19:42:32] Enviando ordens... 30000/34101
+[25/05/2026 19:42:33] Enviando ordens... 31000/34101
+[25/05/2026 19:42:34] Enviando ordens... 32000/34101
+[25/05/2026 19:42:35] Enviando ordens... 33000/34101
+[25/05/2026 19:42:36] Enviando ordens... 34000/34101
+[25/05/2026 19:42:36] Enviando ordens... 34101/34101
+[25/05/2026 19:42:36] ✅ 34101 registros enviados para ordens!
+[25/05/2026 19:42:36] Sem mudança nos apontamentos
+[25/05/2026 20:42:36] 📄 CPCC detectado: CPCC0401.csv
+[25/05/2026 20:42:36] Atualizando ordens com CPCC0401.csv...
+[25/05/2026 20:42:39] 33999 ordens encontradas
+[25/05/2026 20:42:40] Tabela ordens limpa!
+[25/05/2026 20:42:42] Enviando ordens... 1000/33999
+[25/05/2026 20:42:43] Enviando ordens... 2000/33999
+[25/05/2026 20:42:45] Enviando ordens... 3000/33999
+[25/05/2026 20:42:46] Enviando ordens... 4000/33999
+[25/05/2026 20:42:47] Enviando ordens... 5000/33999
+[25/05/2026 20:42:49] Enviando ordens... 6000/33999
+[25/05/2026 20:42:49] Enviando ordens... 7000/33999
+[25/05/2026 20:42:51] Enviando ordens... 8000/33999
+[25/05/2026 20:42:52] Enviando ordens... 9000/33999
+[25/05/2026 20:42:53] Enviando ordens... 10000/33999
+[25/05/2026 20:42:53] Enviando ordens... 11000/33999
+[25/05/2026 20:42:54] Enviando ordens... 12000/33999
+[25/05/2026 20:42:55] Enviando ordens... 13000/33999
+[25/05/2026 20:42:56] Enviando ordens... 14000/33999
+[25/05/2026 20:42:57] Enviando ordens... 15000/33999
+[25/05/2026 20:42:58] Enviando ordens... 16000/33999
+[25/05/2026 20:42:58] Enviando ordens... 17000/33999
+[25/05/2026 20:42:59] Enviando ordens... 18000/33999
+[25/05/2026 20:43:00] Enviando ordens... 19000/33999
+[25/05/2026 20:43:01] Enviando ordens... 20000/33999
+[25/05/2026 20:43:02] Enviando ordens... 21000/33999
+[25/05/2026 20:43:03] Enviando ordens... 22000/33999
+[25/05/2026 20:43:03] Enviando ordens... 23000/33999
+[25/05/2026 20:43:04] Enviando ordens... 24000/33999
+[25/05/2026 20:43:05] Enviando ordens... 25000/33999
+[25/05/2026 20:43:06] Enviando ordens... 26000/33999
+[25/05/2026 20:43:06] Enviando ordens... 27000/33999
+[25/05/2026 20:43:07] Enviando ordens... 28000/33999
+[25/05/2026 20:43:08] Enviando ordens... 29000/33999
+[25/05/2026 20:43:09] Enviando ordens... 30000/33999
+[25/05/2026 20:43:10] Enviando ordens... 31000/33999
+[25/05/2026 20:43:11] Enviando ordens... 32000/33999
+[25/05/2026 20:43:12] Enviando ordens... 33000/33999
+[25/05/2026 20:43:13] Enviando ordens... 33999/33999
+[25/05/2026 20:43:13] ✅ 33999 registros enviados para ordens!
+[25/05/2026 20:43:13] Sem mudança nos apontamentos
+[25/05/2026 21:43:13] 📄 CPCC detectado: CPCC0401.csv
+[25/05/2026 21:43:13] Atualizando ordens com CPCC0401.csv...
+[25/05/2026 21:43:15] 33934 ordens encontradas
+[25/05/2026 21:43:17] Tabela ordens limpa!
+[25/05/2026 21:43:18] Enviando ordens... 1000/33934
+[25/05/2026 21:43:20] Enviando ordens... 2000/33934
+[25/05/2026 21:43:21] Enviando ordens... 3000/33934
+[25/05/2026 21:43:22] Enviando ordens... 4000/33934
+[25/05/2026 21:43:23] Enviando ordens... 5000/33934
+[25/05/2026 21:43:23] Enviando ordens... 6000/33934
+[25/05/2026 21:43:25] Enviando ordens... 7000/33934
+[25/05/2026 21:43:25] Enviando ordens... 8000/33934
+[25/05/2026 21:43:27] Enviando ordens... 9000/33934
+[25/05/2026 21:43:28] Enviando ordens... 10000/33934
+[25/05/2026 21:43:29] Enviando ordens... 11000/33934
+[25/05/2026 21:43:30] Enviando ordens... 12000/33934
+[25/05/2026 21:43:30] Enviando ordens... 13000/33934
+[25/05/2026 21:43:31] Enviando ordens... 14000/33934
+[25/05/2026 21:43:32] Enviando ordens... 15000/33934
+[25/05/2026 21:43:32] Enviando ordens... 16000/33934
+[25/05/2026 21:43:33] Enviando ordens... 17000/33934
+[25/05/2026 21:43:34] Enviando ordens... 18000/33934
+[25/05/2026 21:43:35] Enviando ordens... 19000/33934
+[25/05/2026 21:43:35] Enviando ordens... 20000/33934
+[25/05/2026 21:43:36] Enviando ordens... 21000/33934
+[25/05/2026 21:43:37] Enviando ordens... 22000/33934
+[25/05/2026 21:43:37] Enviando ordens... 23000/33934
+[25/05/2026 21:43:38] Enviando ordens... 24000/33934
+[25/05/2026 21:43:39] Enviando ordens... 25000/33934
+[25/05/2026 21:43:39] Enviando ordens... 26000/33934
+[25/05/2026 21:43:40] Enviando ordens... 27000/33934
+[25/05/2026 21:43:41] Enviando ordens... 28000/33934
+[25/05/2026 21:43:41] Enviando ordens... 29000/33934
+[25/05/2026 21:43:42] Enviando ordens... 30000/33934
+[25/05/2026 21:43:42] Enviando ordens... 31000/33934
+[25/05/2026 21:43:43] Enviando ordens... 32000/33934
+[25/05/2026 21:43:43] Enviando ordens... 33000/33934
+[25/05/2026 21:43:44] Enviando ordens... 33934/33934
+[25/05/2026 21:43:44] ✅ 33934 registros enviados para ordens!
+[25/05/2026 21:43:44] Sem mudança nos apontamentos
+[25/05/2026 22:43:45] 📄 CPCC detectado: CPCC0401.csv
+[25/05/2026 22:43:45] Atualizando ordens com CPCC0401.csv...
+[25/05/2026 22:43:47] 33882 ordens encontradas
+[25/05/2026 22:43:48] Tabela ordens limpa!
+[25/05/2026 22:43:50] Enviando ordens... 1000/33882
+[25/05/2026 22:43:51] Enviando ordens... 2000/33882
+[25/05/2026 22:43:52] Enviando ordens... 3000/33882
+[25/05/2026 22:43:53] Enviando ordens... 4000/33882
+[25/05/2026 22:43:54] Enviando ordens... 5000/33882
+[25/05/2026 22:43:54] Enviando ordens... 6000/33882
+[25/05/2026 22:43:56] Enviando ordens... 7000/33882
+[25/05/2026 22:43:56] Enviando ordens... 8000/33882
+[25/05/2026 22:43:57] Enviando ordens... 9000/33882
+[25/05/2026 22:43:58] Enviando ordens... 10000/33882
+[25/05/2026 22:43:58] Enviando ordens... 11000/33882
+[25/05/2026 22:44:00] Enviando ordens... 12000/33882
+[25/05/2026 22:44:01] Enviando ordens... 13000/33882
+[25/05/2026 22:44:02] Enviando ordens... 14000/33882
+[25/05/2026 22:44:02] Enviando ordens... 15000/33882
+[25/05/2026 22:44:03] Enviando ordens... 16000/33882
+[25/05/2026 22:44:04] Enviando ordens... 17000/33882
+[25/05/2026 22:44:05] Enviando ordens... 18000/33882
+[25/05/2026 22:44:06] Enviando ordens... 19000/33882
+[25/05/2026 22:44:06] Enviando ordens... 20000/33882
+[25/05/2026 22:44:07] Enviando ordens... 21000/33882
+[25/05/2026 22:44:07] Enviando ordens... 22000/33882
+[25/05/2026 22:44:08] Enviando ordens... 23000/33882
+[25/05/2026 22:44:09] Enviando ordens... 24000/33882
+[25/05/2026 22:44:09] Enviando ordens... 25000/33882
+[25/05/2026 22:44:11] Enviando ordens... 26000/33882
+[25/05/2026 22:44:11] Enviando ordens... 27000/33882
+[25/05/2026 22:44:12] Enviando ordens... 28000/33882
+[25/05/2026 22:44:14] Enviando ordens... 29000/33882
+[25/05/2026 22:44:14] Enviando ordens... 30000/33882
+[25/05/2026 22:44:15] Enviando ordens... 31000/33882
+[25/05/2026 22:44:15] Enviando ordens... 32000/33882
+[25/05/2026 22:44:16] Enviando ordens... 33000/33882
+[25/05/2026 22:44:17] Enviando ordens... 33882/33882
+[25/05/2026 22:44:17] ✅ 33882 registros enviados para ordens!
+[25/05/2026 22:44:17] Sem mudança nos apontamentos
+[25/05/2026 23:44:17] 📄 CPCC detectado: CPCC0401.csv
+[25/05/2026 23:44:17] Atualizando ordens com CPCC0401.csv...
+[25/05/2026 23:44:19] 33837 ordens encontradas
+[25/05/2026 23:44:21] Tabela ordens limpa!
+[25/05/2026 23:44:22] Enviando ordens... 1000/33837
+[25/05/2026 23:44:24] Enviando ordens... 2000/33837
+[25/05/2026 23:44:25] Enviando ordens... 3000/33837
+[25/05/2026 23:44:25] Enviando ordens... 4000/33837
+[25/05/2026 23:44:26] Enviando ordens... 5000/33837
+[25/05/2026 23:44:27] Enviando ordens... 6000/33837
+[25/05/2026 23:44:28] Enviando ordens... 7000/33837
+[25/05/2026 23:44:31] Enviando ordens... 8000/33837
+[25/05/2026 23:44:32] Enviando ordens... 9000/33837
+[25/05/2026 23:44:33] Enviando ordens... 10000/33837
+[25/05/2026 23:44:33] Enviando ordens... 11000/33837
+[25/05/2026 23:44:34] Enviando ordens... 12000/33837
+[25/05/2026 23:44:35] Enviando ordens... 13000/33837
+[25/05/2026 23:44:36] Enviando ordens... 14000/33837
+[25/05/2026 23:44:36] Enviando ordens... 15000/33837
+[25/05/2026 23:44:37] Enviando ordens... 16000/33837
+[25/05/2026 23:44:38] Enviando ordens... 17000/33837
+[25/05/2026 23:44:39] Enviando ordens... 18000/33837
+[25/05/2026 23:44:40] Enviando ordens... 19000/33837
+[25/05/2026 23:44:41] Enviando ordens... 20000/33837
+[25/05/2026 23:44:42] Enviando ordens... 21000/33837
+[25/05/2026 23:44:43] Enviando ordens... 22000/33837
+[25/05/2026 23:44:43] Enviando ordens... 23000/33837
+[25/05/2026 23:44:44] Enviando ordens... 24000/33837
+[25/05/2026 23:44:45] Enviando ordens... 25000/33837
+[25/05/2026 23:44:47] Enviando ordens... 26000/33837
+[25/05/2026 23:44:47] Enviando ordens... 27000/33837
+[25/05/2026 23:44:48] Enviando ordens... 28000/33837
+[25/05/2026 23:44:48] Enviando ordens... 29000/33837
+[25/05/2026 23:44:49] Enviando ordens... 30000/33837
+[25/05/2026 23:44:50] Enviando ordens... 31000/33837
+[25/05/2026 23:44:51] Enviando ordens... 32000/33837
+[25/05/2026 23:44:52] Enviando ordens... 33000/33837
+[25/05/2026 23:44:53] Enviando ordens... 33837/33837
+[25/05/2026 23:44:53] ✅ 33837 registros enviados para ordens!
+[25/05/2026 23:44:53] Sem mudança nos apontamentos
+[26/05/2026 00:44:53] 📄 CPCC detectado: CPCC0401.csv
+[26/05/2026 00:44:53] Atualizando ordens com CPCC0401.csv...
+[26/05/2026 00:44:55] 33803 ordens encontradas
+[26/05/2026 00:44:57] Tabela ordens limpa!
+[26/05/2026 00:45:00] Enviando ordens... 1000/33803
+[26/05/2026 00:45:01] Enviando ordens... 2000/33803
+[26/05/2026 00:45:02] Enviando ordens... 3000/33803
+[26/05/2026 00:45:03] Enviando ordens... 4000/33803
+[26/05/2026 00:45:03] Enviando ordens... 5000/33803
+[26/05/2026 00:45:04] Enviando ordens... 6000/33803
+[26/05/2026 00:45:05] Enviando ordens... 7000/33803
+[26/05/2026 00:45:05] Enviando ordens... 8000/33803
+[26/05/2026 00:45:06] Enviando ordens... 9000/33803
+[26/05/2026 00:45:07] Enviando ordens... 10000/33803
+[26/05/2026 00:45:07] Enviando ordens... 11000/33803
+[26/05/2026 00:45:09] Enviando ordens... 12000/33803
+[26/05/2026 00:45:09] Enviando ordens... 13000/33803
+[26/05/2026 00:45:10] Enviando ordens... 14000/33803
+[26/05/2026 00:45:10] Enviando ordens... 15000/33803
+[26/05/2026 00:45:11] Enviando ordens... 16000/33803
+[26/05/2026 00:45:12] Enviando ordens... 17000/33803
+[26/05/2026 00:45:13] Enviando ordens... 18000/33803
+[26/05/2026 00:45:13] Enviando ordens... 19000/33803
+[26/05/2026 00:45:14] Enviando ordens... 20000/33803
+[26/05/2026 00:45:15] Enviando ordens... 21000/33803
+[26/05/2026 00:45:15] Enviando ordens... 22000/33803
+[26/05/2026 00:45:16] Enviando ordens... 23000/33803
+[26/05/2026 00:45:17] Enviando ordens... 24000/33803
+[26/05/2026 00:45:18] Enviando ordens... 25000/33803
+[26/05/2026 00:45:19] Enviando ordens... 26000/33803
+[26/05/2026 00:45:20] Enviando ordens... 27000/33803
+[26/05/2026 00:45:20] Enviando ordens... 28000/33803
+[26/05/2026 00:45:22] Enviando ordens... 29000/33803
+[26/05/2026 00:45:23] Enviando ordens... 30000/33803
+[26/05/2026 00:45:24] Enviando ordens... 31000/33803
+[26/05/2026 00:45:25] Enviando ordens... 32000/33803
+[26/05/2026 00:45:26] Enviando ordens... 33000/33803
+[26/05/2026 00:45:26] Enviando ordens... 33803/33803
+[26/05/2026 00:45:26] ✅ 33803 registros enviados para ordens!
+[26/05/2026 00:45:26] Sem mudança nos apontamentos
+[26/05/2026 01:45:26] 📄 CPCC detectado: CPCC0401.csv
+[26/05/2026 01:45:26] Atualizando ordens com CPCC0401.csv...
+[26/05/2026 01:45:28] 33759 ordens encontradas
+[26/05/2026 01:45:31] Tabela ordens limpa!
+[26/05/2026 01:45:32] Enviando ordens... 1000/33759
+[26/05/2026 01:45:33] Enviando ordens... 2000/33759
+[26/05/2026 01:45:34] Enviando ordens... 3000/33759
+[26/05/2026 01:45:35] Enviando ordens... 4000/33759
+[26/05/2026 01:45:35] Enviando ordens... 5000/33759
+[26/05/2026 01:45:36] Enviando ordens... 6000/33759
+[26/05/2026 01:45:36] Enviando ordens... 7000/33759
+[26/05/2026 01:45:37] Enviando ordens... 8000/33759
+[26/05/2026 01:45:38] Enviando ordens... 9000/33759
+[26/05/2026 01:45:38] Enviando ordens... 10000/33759
+[26/05/2026 01:45:39] Enviando ordens... 11000/33759
+[26/05/2026 01:45:40] Enviando ordens... 12000/33759
+[26/05/2026 01:45:41] Enviando ordens... 13000/33759
+[26/05/2026 01:45:41] Enviando ordens... 14000/33759
+[26/05/2026 01:45:42] Enviando ordens... 15000/33759
+[26/05/2026 01:45:43] Enviando ordens... 16000/33759
+[26/05/2026 01:45:43] Enviando ordens... 17000/33759
+[26/05/2026 01:45:44] Enviando ordens... 18000/33759
+[26/05/2026 01:45:44] Enviando ordens... 19000/33759
+[26/05/2026 01:45:45] Enviando ordens... 20000/33759
+[26/05/2026 01:45:45] Enviando ordens... 21000/33759
+[26/05/2026 01:45:46] Enviando ordens... 22000/33759
+[26/05/2026 01:45:46] Enviando ordens... 23000/33759
+[26/05/2026 01:45:47] Enviando ordens... 24000/33759
+[26/05/2026 01:45:48] Enviando ordens... 25000/33759
+[26/05/2026 01:45:48] Enviando ordens... 26000/33759
+[26/05/2026 01:45:49] Enviando ordens... 27000/33759
+[26/05/2026 01:45:50] Enviando ordens... 28000/33759
+[26/05/2026 01:45:50] Enviando ordens... 29000/33759
+[26/05/2026 01:45:51] Enviando ordens... 30000/33759
+[26/05/2026 01:45:51] Enviando ordens... 31000/33759
+[26/05/2026 01:45:52] Enviando ordens... 32000/33759
+[26/05/2026 01:45:53] Enviando ordens... 33000/33759
+[26/05/2026 01:45:54] Enviando ordens... 33759/33759
+[26/05/2026 01:45:54] ✅ 33759 registros enviados para ordens!
+[26/05/2026 01:45:54] Sem mudança nos apontamentos
+[26/05/2026 02:45:54] 📄 CPCC detectado: CPCC0401.csv
+[26/05/2026 02:45:54] Atualizando ordens com CPCC0401.csv...
+[26/05/2026 02:45:56] 33704 ordens encontradas
+[26/05/2026 02:45:59] Tabela ordens limpa!
+[26/05/2026 02:46:01] Enviando ordens... 1000/33704
+[26/05/2026 02:46:01] Enviando ordens... 2000/33704
+[26/05/2026 02:46:02] Enviando ordens... 3000/33704
+[26/05/2026 02:46:03] Enviando ordens... 4000/33704
+[26/05/2026 02:46:03] Enviando ordens... 5000/33704
+[26/05/2026 02:46:04] Enviando ordens... 6000/33704
+[26/05/2026 02:46:04] Enviando ordens... 7000/33704
+[26/05/2026 02:46:05] Enviando ordens... 8000/33704
+[26/05/2026 02:46:06] Enviando ordens... 9000/33704
+[26/05/2026 02:46:06] Enviando ordens... 10000/33704
+[26/05/2026 02:46:07] Enviando ordens... 11000/33704
+[26/05/2026 02:46:07] Enviando ordens... 12000/33704
+[26/05/2026 02:46:08] Enviando ordens... 13000/33704
+[26/05/2026 02:46:08] Enviando ordens... 14000/33704
+[26/05/2026 02:46:09] Enviando ordens... 15000/33704
+[26/05/2026 02:46:10] Enviando ordens... 16000/33704
+[26/05/2026 02:46:10] Enviando ordens... 17000/33704
+[26/05/2026 02:46:11] Enviando ordens... 18000/33704
+[26/05/2026 02:46:11] Enviando ordens... 19000/33704
+[26/05/2026 02:46:12] Enviando ordens... 20000/33704
+[26/05/2026 02:46:12] Enviando ordens... 21000/33704
+[26/05/2026 02:46:13] Enviando ordens... 22000/33704
+[26/05/2026 02:46:13] Enviando ordens... 23000/33704
+[26/05/2026 02:46:14] Enviando ordens... 24000/33704
+[26/05/2026 02:46:14] Enviando ordens... 25000/33704
+[26/05/2026 02:46:15] Enviando ordens... 26000/33704
+[26/05/2026 02:46:15] Enviando ordens... 27000/33704
+[26/05/2026 02:46:16] Enviando ordens... 28000/33704
+[26/05/2026 02:46:17] Enviando ordens... 29000/33704
+[26/05/2026 02:46:17] Enviando ordens... 30000/33704
+[26/05/2026 02:46:19] Enviando ordens... 31000/33704
+[26/05/2026 02:46:20] Enviando ordens... 32000/33704
+[26/05/2026 02:46:21] Enviando ordens... 33000/33704
+[26/05/2026 02:46:22] Enviando ordens... 33704/33704
+[26/05/2026 02:46:22] ✅ 33704 registros enviados para ordens!
+[26/05/2026 02:46:22] Sem mudança nos apontamentos
+[26/05/2026 03:46:22] 📄 CPCC detectado: CPCC0401.csv
+[26/05/2026 03:46:22] Atualizando ordens com CPCC0401.csv...
+[26/05/2026 03:46:24] 33678 ordens encontradas
+[26/05/2026 03:46:26] Tabela ordens limpa!
+[26/05/2026 03:46:27] Enviando ordens... 1000/33678
+[26/05/2026 03:46:28] Enviando ordens... 2000/33678
+[26/05/2026 03:46:29] Enviando ordens... 3000/33678
+[26/05/2026 03:46:29] Enviando ordens... 4000/33678
+[26/05/2026 03:46:30] Enviando ordens... 5000/33678
+[26/05/2026 03:46:31] Enviando ordens... 6000/33678
+[26/05/2026 03:46:31] Enviando ordens... 7000/33678
+[26/05/2026 03:46:32] Enviando ordens... 8000/33678
+[26/05/2026 03:46:32] Enviando ordens... 9000/33678
+[26/05/2026 03:46:33] Enviando ordens... 10000/33678
+[26/05/2026 03:46:34] Enviando ordens... 11000/33678
+[26/05/2026 03:46:34] Enviando ordens... 12000/33678
+[26/05/2026 03:46:35] Enviando ordens... 13000/33678
+[26/05/2026 03:46:36] Enviando ordens... 14000/33678
+[26/05/2026 03:46:37] Enviando ordens... 15000/33678
+[26/05/2026 03:46:38] Enviando ordens... 16000/33678
+[26/05/2026 03:46:38] Enviando ordens... 17000/33678
+[26/05/2026 03:46:39] Enviando ordens... 18000/33678
+[26/05/2026 03:46:40] Enviando ordens... 19000/33678
+[26/05/2026 03:46:40] Enviando ordens... 20000/33678
+[26/05/2026 03:46:41] Enviando ordens... 21000/33678
+[26/05/2026 03:46:42] Enviando ordens... 22000/33678
+[26/05/2026 03:46:42] Enviando ordens... 23000/33678
+[26/05/2026 03:46:44] Enviando ordens... 24000/33678
+[26/05/2026 03:46:45] Enviando ordens... 25000/33678
+[26/05/2026 03:46:45] Enviando ordens... 26000/33678
+[26/05/2026 03:46:46] Enviando ordens... 27000/33678
+[26/05/2026 03:46:47] Enviando ordens... 28000/33678
+[26/05/2026 03:46:47] Enviando ordens... 29000/33678
+[26/05/2026 03:46:48] Enviando ordens... 30000/33678
+[26/05/2026 03:46:48] Enviando ordens... 31000/33678
+[26/05/2026 03:46:49] Enviando ordens... 32000/33678
+[26/05/2026 03:46:50] Enviando ordens... 33000/33678
+[26/05/2026 03:46:50] Enviando ordens... 33678/33678
+[26/05/2026 03:46:50] ✅ 33678 registros enviados para ordens!
+[26/05/2026 03:46:50] Sem mudança nos apontamentos
+[26/05/2026 04:46:50] 📄 CPCC detectado: CPCC0401.csv
+[26/05/2026 04:46:50] Atualizando ordens com CPCC0401.csv...
+[26/05/2026 04:46:54] 33667 ordens encontradas
+[26/05/2026 04:46:57] Tabela ordens limpa!
+[26/05/2026 04:46:59] Enviando ordens... 1000/33667
+[26/05/2026 04:47:00] Enviando ordens... 2000/33667
+[26/05/2026 04:47:01] Enviando ordens... 3000/33667
+[26/05/2026 04:47:02] Enviando ordens... 4000/33667
+[26/05/2026 04:47:03] Enviando ordens... 5000/33667
+[26/05/2026 04:47:04] Enviando ordens... 6000/33667
+[26/05/2026 04:47:05] Enviando ordens... 7000/33667
+[26/05/2026 04:47:05] Enviando ordens... 8000/33667
+[26/05/2026 04:47:06] Enviando ordens... 9000/33667
+[26/05/2026 04:47:07] Enviando ordens... 10000/33667
+[26/05/2026 04:47:08] Enviando ordens... 11000/33667
+[26/05/2026 04:47:09] Enviando ordens... 12000/33667
+[26/05/2026 04:47:10] Enviando ordens... 13000/33667
+[26/05/2026 04:47:11] Enviando ordens... 14000/33667
+[26/05/2026 04:47:12] Enviando ordens... 15000/33667
+[26/05/2026 04:47:12] Enviando ordens... 16000/33667
+[26/05/2026 04:47:13] Enviando ordens... 17000/33667
+[26/05/2026 04:47:14] Enviando ordens... 18000/33667
+[26/05/2026 04:47:15] Enviando ordens... 19000/33667
+[26/05/2026 04:47:16] Enviando ordens... 20000/33667
+[26/05/2026 04:47:16] Enviando ordens... 21000/33667
+[26/05/2026 04:47:17] Enviando ordens... 22000/33667
+[26/05/2026 04:47:18] Enviando ordens... 23000/33667
+[26/05/2026 04:47:18] Enviando ordens... 24000/33667
+[26/05/2026 04:47:19] Enviando ordens... 25000/33667
+[26/05/2026 04:47:20] Enviando ordens... 26000/33667
+[26/05/2026 04:47:22] Enviando ordens... 27000/33667
+[26/05/2026 04:47:23] Enviando ordens... 28000/33667
+[26/05/2026 04:47:23] Enviando ordens... 29000/33667
+[26/05/2026 04:47:24] Enviando ordens... 30000/33667
+[26/05/2026 04:47:25] Enviando ordens... 31000/33667
+[26/05/2026 04:47:25] Enviando ordens... 32000/33667
+[26/05/2026 04:47:26] Enviando ordens... 33000/33667
+[26/05/2026 04:47:27] Enviando ordens... 33667/33667
+[26/05/2026 04:47:27] ✅ 33667 registros enviados para ordens!
+[26/05/2026 04:47:27] Sem mudança nos apontamentos
+[26/05/2026 05:47:27] 📄 CPCC detectado: CPCC0401.csv
+[26/05/2026 05:47:27] Atualizando ordens com CPCC0401.csv...
+[26/05/2026 05:47:29] 33759 ordens encontradas
+[26/05/2026 05:47:31] Tabela ordens limpa!
+[26/05/2026 05:47:32] Enviando ordens... 1000/33759
+[26/05/2026 05:47:33] Enviando ordens... 2000/33759
+[26/05/2026 05:47:34] Enviando ordens... 3000/33759
+[26/05/2026 05:47:34] Enviando ordens... 4000/33759
+[26/05/2026 05:47:35] Enviando ordens... 5000/33759
+[26/05/2026 05:47:36] Enviando ordens... 6000/33759
+[26/05/2026 05:47:37] Enviando ordens... 7000/33759
+[26/05/2026 05:47:38] Enviando ordens... 8000/33759
+[26/05/2026 05:47:38] Enviando ordens... 9000/33759
+[26/05/2026 05:47:39] Enviando ordens... 10000/33759
+[26/05/2026 05:47:40] Enviando ordens... 11000/33759
+[26/05/2026 05:47:41] Enviando ordens... 12000/33759
+[26/05/2026 05:47:41] Enviando ordens... 13000/33759
+[26/05/2026 05:47:42] Enviando ordens... 14000/33759
+[26/05/2026 05:47:43] Enviando ordens... 15000/33759
+[26/05/2026 05:47:44] Enviando ordens... 16000/33759
+[26/05/2026 05:47:44] Enviando ordens... 17000/33759
+[26/05/2026 05:47:46] Enviando ordens... 18000/33759
+[26/05/2026 05:47:46] Enviando ordens... 19000/33759
+[26/05/2026 05:47:47] Enviando ordens... 20000/33759
+[26/05/2026 05:47:48] Enviando ordens... 21000/33759
+[26/05/2026 05:47:49] Enviando ordens... 22000/33759
+[26/05/2026 05:47:50] Enviando ordens... 23000/33759
+[26/05/2026 05:47:50] Enviando ordens... 24000/33759
+[26/05/2026 05:47:51] Enviando ordens... 25000/33759
+[26/05/2026 05:47:52] Enviando ordens... 26000/33759
+[26/05/2026 05:47:53] Enviando ordens... 27000/33759
+[26/05/2026 05:47:53] Enviando ordens... 28000/33759
+[26/05/2026 05:47:54] Enviando ordens... 29000/33759
+[26/05/2026 05:47:55] Enviando ordens... 30000/33759
+[26/05/2026 05:47:56] Enviando ordens... 31000/33759
+[26/05/2026 05:47:57] Enviando ordens... 32000/33759
+[26/05/2026 05:47:58] Enviando ordens... 33000/33759
+[26/05/2026 05:47:58] Enviando ordens... 33759/33759
+[26/05/2026 05:47:58] ✅ 33759 registros enviados para ordens!
+[26/05/2026 05:47:58] Sem mudança nos apontamentos
+[26/05/2026 06:47:59] 📄 CPCC detectado: CPCC0401.csv
+[26/05/2026 06:47:59] Atualizando ordens com CPCC0401.csv...
+[26/05/2026 06:48:00] 33755 ordens encontradas
+[26/05/2026 06:48:03] Tabela ordens limpa!
+[26/05/2026 06:48:05] Enviando ordens... 1000/33755
+[26/05/2026 06:48:07] Enviando ordens... 2000/33755
+[26/05/2026 06:48:08] Enviando ordens... 3000/33755
+[26/05/2026 06:48:09] Enviando ordens... 4000/33755
+[26/05/2026 06:48:10] Enviando ordens... 5000/33755
+[26/05/2026 06:48:11] Enviando ordens... 6000/33755
+[26/05/2026 06:48:12] Enviando ordens... 7000/33755
+[26/05/2026 06:48:13] Enviando ordens... 8000/33755
+[26/05/2026 06:48:14] Enviando ordens... 9000/33755
+[26/05/2026 06:48:15] Enviando ordens... 10000/33755
+[26/05/2026 06:48:16] Enviando ordens... 11000/33755
+[26/05/2026 06:48:18] Enviando ordens... 12000/33755
+[26/05/2026 06:48:18] Enviando ordens... 13000/33755
+[26/05/2026 06:48:20] Enviando ordens... 14000/33755
+[26/05/2026 06:48:21] Enviando ordens... 15000/33755
+[26/05/2026 06:48:22] Enviando ordens... 16000/33755
+[26/05/2026 06:48:22] Enviando ordens... 17000/33755
+[26/05/2026 06:48:23] Enviando ordens... 18000/33755
+[26/05/2026 06:48:25] Enviando ordens... 19000/33755
+[26/05/2026 06:48:26] Enviando ordens... 20000/33755
+[26/05/2026 06:48:27] Enviando ordens... 21000/33755
+[26/05/2026 06:48:28] Enviando ordens... 22000/33755
+[26/05/2026 06:48:29] Enviando ordens... 23000/33755
+[26/05/2026 06:48:30] Enviando ordens... 24000/33755
+[26/05/2026 06:48:31] Enviando ordens... 25000/33755
+[26/05/2026 06:48:32] Enviando ordens... 26000/33755
+[26/05/2026 06:48:33] Enviando ordens... 27000/33755
+[26/05/2026 06:48:33] Enviando ordens... 28000/33755
+[26/05/2026 06:48:34] Enviando ordens... 29000/33755
+[26/05/2026 06:48:35] Enviando ordens... 30000/33755
+[26/05/2026 06:48:35] Enviando ordens... 31000/33755
+[26/05/2026 06:48:36] Enviando ordens... 32000/33755
+[26/05/2026 06:48:37] Enviando ordens... 33000/33755
+[26/05/2026 06:48:38] Enviando ordens... 33755/33755
+[26/05/2026 06:48:38] ✅ 33755 registros enviados para ordens!
+[26/05/2026 06:48:38] Sem mudança nos apontamentos

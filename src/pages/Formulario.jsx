@@ -92,7 +92,7 @@ function parseData(dataStr) {
 }
 
 function formatarTempo(minutos) {
-  if (!minutos) return '—'
+  if (!minutos || minutos <= 0) return '—'
   const h = Math.floor(minutos / 60)
   const m = minutos % 60
   if (h === 0) return `${m}min`
@@ -352,7 +352,7 @@ function PlanejarCorte({ usuario }) {
   const [totalChapas, setTotalChapas] = useState('')
   const [tipoCort, setTipoCort] = useState('total')
   const [chapasParcial, setChapasParcial] = useState('')
-  const [cncs, setCncs] = useState([]) // [{codigo, tempoH, tempoM}]
+  const [cncs, setCncs] = useState([])
   const [loading, setLoading] = useState(false)
   const [salvando, setSalvando] = useState(false)
   const [toast, setToast] = useState(null)
@@ -379,7 +379,7 @@ function PlanejarCorte({ usuario }) {
   }
 
   function adicionarCNC() {
-    setCncs(prev => [...prev, { codigo: '', tempoH: '', tempoM: '' }])
+    setCncs(prev => [...prev, { codigo: '', chapas: '', tempoH: '', tempoM: '' }])
   }
 
   function removerCNC(idx) {
@@ -390,17 +390,15 @@ function PlanejarCorte({ usuario }) {
     setCncs(prev => prev.map((c, i) => i === idx ? { ...c, [campo]: valor } : c))
   }
 
-  // Calcula tempo total de todos os CNCs
-  const tempoTotalCNCs = cncs.reduce((s, c) => {
-    const min = (parseInt(c.tempoH) || 0) * 60 + (parseInt(c.tempoM) || 0)
-    return s + min
-  }, 0)
+  // Calcula tempo total de cada CNC: chapas × tempo por chapa
+  function tempoTotalCNC(cnc) {
+    const chapas = parseInt(cnc.chapas) || 1
+    const minPorChapa = (parseInt(cnc.tempoH) || 0) * 60 + (parseInt(cnc.tempoM) || 0)
+    return chapas * minPorChapa
+  }
 
-  // Tempo unitário médio por chapa (para compatibilidade)
-  const chapasParaCortar = tipoCort === 'parcial' ? parseInt(chapasParcial) || 0 : parseInt(totalChapas) || 0
-  const tempoUnitMedio = cncs.length > 0 && chapasParaCortar > 0
-    ? Math.round(tempoTotalCNCs / cncs.length)
-    : 0
+  const tempoTotalJob = cncs.reduce((s, c) => s + tempoTotalCNC(c), 0)
+  const totalChapasCNCs = cncs.reduce((s, c) => s + (parseInt(c.chapas) || 0), 0)
 
   async function buscarOrdens() {
     if (!maquina || !job) { showToast('Informe a máquina e o job!', 'var(--red)'); return }
@@ -435,11 +433,12 @@ function PlanejarCorte({ usuario }) {
     const estab = ordens[0]?.estab || ''
     const chapasCortar = tipoCort === 'parcial' ? parseInt(chapasParcial) : parseInt(totalChapas)
 
-    // Monta array de CNCs com tempo em minutos
     const cncsFormatados = cncs.map((c, i) => ({
       numero: i + 1,
       codigo: c.codigo,
-      tempo: (parseInt(c.tempoH) || 0) * 60 + (parseInt(c.tempoM) || 0)
+      chapas: parseInt(c.chapas) || 1,
+      tempoPorChapa: (parseInt(c.tempoH) || 0) * 60 + (parseInt(c.tempoM) || 0),
+      tempoTotal: tempoTotalCNC(c)
     }))
 
     const { error } = await supabase.from('laser_planejamento').insert({
@@ -447,7 +446,9 @@ function PlanejarCorte({ usuario }) {
       total_chapas: parseInt(totalChapas),
       tipo: tipoCort,
       chapas_cortar: chapasCortar,
-      tempo_chapa: tempoUnitMedio || null,
+      tempo_chapa: cncsFormatados.length > 0 && chapasCortar > 0
+        ? Math.round(tempoTotalJob / chapasCortar)
+        : null,
       cncs: cncsFormatados,
       cnc_ativo: 0,
       chapas_feitas: 0,
@@ -564,14 +565,17 @@ function PlanejarCorte({ usuario }) {
             </div>
           )}
 
-          {/* CNCs do nesting */}
+          {/* CNCs */}
           <div className="field">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <label style={{ marginBottom: 0 }}>CNCs do nesting <span style={{ fontSize: 11, color: 'var(--muted)' }}>(opcional)</span></label>
+              <label style={{ marginBottom: 0 }}>
+                CNCs do nesting <span style={{ fontSize: 11, color: 'var(--muted)' }}>(opcional)</span>
+              </label>
               <button onClick={adicionarCNC} style={{
                 background: 'rgba(0,229,255,.1)', border: '1px solid rgba(0,229,255,.3)',
                 borderRadius: 8, padding: '5px 10px', cursor: 'pointer',
-                color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700
+                color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 4,
+                fontSize: 12, fontWeight: 700
               }}>
                 <Plus size={13} /> Adicionar CNC
               </button>
@@ -587,79 +591,99 @@ function PlanejarCorte({ usuario }) {
               </div>
             )}
 
-            {cncs.map((cnc, idx) => (
-              <div key={idx} style={{
-                background: 'var(--surface2)', borderRadius: 10,
-                padding: '12px', marginBottom: 8,
-                border: '1px solid var(--border)'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                  <div style={{
-                    width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
-                    background: 'var(--accent)', display: 'flex', alignItems: 'center',
-                    justifyContent: 'center', fontFamily: 'monospace', fontSize: 12,
-                    fontWeight: 700, color: '#000'
-                  }}>{idx + 1}</div>
-                  <div style={{ flex: 1, fontWeight: 700, fontSize: 13 }}>CNC {idx + 1}</div>
-                  <button onClick={() => removerCNC(idx)} style={{
-                    background: 'rgba(255,61,90,.1)', border: '1px solid rgba(255,61,90,.3)',
-                    borderRadius: 6, padding: '4px 6px', cursor: 'pointer', color: 'var(--red)'
-                  }}>
-                    <Trash2 size={12} />
-                  </button>
-                </div>
+            {cncs.map((cnc, idx) => {
+              const tempoTotal = tempoTotalCNC(cnc)
+              return (
+                <div key={idx} style={{
+                  background: 'var(--surface2)', borderRadius: 10,
+                  padding: '12px', marginBottom: 8,
+                  border: '1px solid var(--border)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <div style={{
+                      width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
+                      background: 'var(--accent)', display: 'flex', alignItems: 'center',
+                      justifyContent: 'center', fontFamily: 'monospace', fontSize: 12,
+                      fontWeight: 700, color: '#000'
+                    }}>{idx + 1}</div>
+                    <div style={{ flex: 1, fontWeight: 700, fontSize: 13 }}>CNC {idx + 1}</div>
+                    {tempoTotal > 0 && (
+                      <div style={{
+                        background: 'rgba(0,229,255,.1)', borderRadius: 6,
+                        padding: '2px 8px', fontSize: 11, fontWeight: 700, color: 'var(--accent)'
+                      }}>⏱️ {formatarTempo(tempoTotal)}</div>
+                    )}
+                    <button onClick={() => removerCNC(idx)} style={{
+                      background: 'rgba(255,61,90,.1)', border: '1px solid rgba(255,61,90,.3)',
+                      borderRadius: 6, padding: '4px 6px', cursor: 'pointer', color: 'var(--red)'
+                    }}>
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
 
-                <div className="field" style={{ marginBottom: 8 }}>
-                  <label style={{ fontSize: 11 }}>Código do CNC</label>
-                  <input className="input" value={cnc.codigo}
-                    onChange={e => atualizarCNC(idx, 'codigo', e.target.value)}
-                    placeholder="Ex: CNC-001, A1, Prog01..." />
-                </div>
+                  <div className="field" style={{ marginBottom: 8 }}>
+                    <label style={{ fontSize: 11 }}>Código do programa</label>
+                    <input className="input" value={cnc.codigo}
+                      onChange={e => atualizarCNC(idx, 'codigo', e.target.value)}
+                      placeholder="Ex: CNC-001, A1, Prog01..." />
+                  </div>
 
-                <div className="field" style={{ marginBottom: 0 }}>
-                  <label style={{ fontSize: 11 }}>Tempo de corte</label>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <div style={{ flex: 1 }}>
-                      <input className="input" type="number" value={cnc.tempoH}
-                        onChange={e => atualizarCNC(idx, 'tempoH', e.target.value)}
-                        placeholder="0" min="0" />
-                      <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'center', marginTop: 3 }}>horas</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 8 }}>
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <label style={{ fontSize: 11 }}>Nº chapas</label>
+                      <input className="input" type="number" value={cnc.chapas}
+                        onChange={e => atualizarCNC(idx, 'chapas', e.target.value)}
+                        placeholder="1" min="1" />
                     </div>
-                    <div style={{ flex: 1 }}>
-                      <input className="input" type="number" value={cnc.tempoM}
-                        onChange={e => atualizarCNC(idx, 'tempoM', e.target.value)}
-                        placeholder="0" min="0" max="59" />
-                      <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'center', marginTop: 3 }}>minutos</div>
-                    </div>
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                      <div style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}>
-                        {formatarTempo((parseInt(cnc.tempoH) || 0) * 60 + (parseInt(cnc.tempoM) || 0))}
+
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <label style={{ fontSize: 11 }}>Tempo por chapa</label>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <div style={{ flex: 1 }}>
+                          <input className="input" type="number" value={cnc.tempoH}
+                            onChange={e => atualizarCNC(idx, 'tempoH', e.target.value)}
+                            placeholder="0" min="0" />
+                          <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'center', marginTop: 2 }}>h</div>
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <input className="input" type="number" value={cnc.tempoM}
+                            onChange={e => atualizarCNC(idx, 'tempoM', e.target.value)}
+                            placeholder="0" min="0" max="59" />
+                          <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'center', marginTop: 2 }}>min</div>
+                        </div>
                       </div>
-                      <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>total</div>
                     </div>
                   </div>
-                </div>
-              </div>
-            ))}
 
-            {/* Resumo tempo total dos CNCs */}
-            {cncs.length > 0 && tempoTotalCNCs > 0 && (
+                  {/* Resumo do CNC */}
+                  {tempoTotal > 0 && (parseInt(cnc.chapas) || 0) > 0 && (
+                    <div style={{
+                      marginTop: 8, padding: '6px 10px',
+                      background: 'rgba(0,229,255,.06)', borderRadius: 6,
+                      fontSize: 11, color: 'var(--muted)'
+                    }}>
+                      {parseInt(cnc.chapas)} chapa(s) × {formatarTempo((parseInt(cnc.tempoH) || 0) * 60 + (parseInt(cnc.tempoM) || 0))}/chapa = <strong style={{ color: 'var(--accent)' }}>{formatarTempo(tempoTotal)}</strong>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+
+            {/* Resumo total */}
+            {cncs.length > 0 && tempoTotalJob > 0 && (
               <div style={{
-                background: 'rgba(0,229,255,.08)', border: '1px solid rgba(0,229,255,.3)',
+                background: 'rgba(255,214,10,.08)', border: '1px solid rgba(255,214,10,.3)',
                 borderRadius: 10, padding: '12px 16px', marginTop: 8,
                 display: 'flex', alignItems: 'center', gap: 12
               }}>
                 <div style={{ fontSize: 24 }}>⏱️</div>
-                <div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 2 }}>Tempo total dos {cncs.length} CNC(s)</div>
-                  <div style={{ fontFamily: 'monospace', fontSize: 20, fontWeight: 700, color: 'var(--accent)' }}>
-                    {formatarTempo(tempoTotalCNCs)}
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 2 }}>
+                    Tempo total do job ({cncs.length} CNC{cncs.length > 1 ? 's' : ''} · {totalChapasCNCs} chapa{totalChapasCNCs !== 1 ? 's' : ''})
                   </div>
-                  {cncs.length > 1 && (
-                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-                      Média: {formatarTempo(Math.round(tempoTotalCNCs / cncs.length))} por CNC
-                    </div>
-                  )}
+                  <div style={{ fontFamily: 'monospace', fontSize: 22, fontWeight: 700, color: 'var(--yellow)' }}>
+                    {formatarTempo(tempoTotalJob)}
+                  </div>
                 </div>
               </div>
             )}
@@ -833,6 +857,7 @@ function ApontarProducao({ usuario }) {
             Máquina: {planejamento.maquina} · {planejamento.total_chapas} chapas
             {planejamento.turno ? ` · ${nomeTurno(planejamento.turno)}` : ''}
             {planejamento.tipo === 'parcial' ? ` · Parcial: ${planejamento.chapas_cortar} chapas` : ' · Total'}
+            {planejamento.tempo_chapa ? ` · ⏱️ ${formatarTempo(planejamento.chapas_cortar * planejamento.tempo_chapa)} estimado` : ''}
           </div>
         </div>
       )}
@@ -859,13 +884,13 @@ function ApontarProducao({ usuario }) {
               }}>{cnc.numero}</div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: 13, color: cncAtivo === idx ? 'var(--accent)' : 'var(--text)' }}>
-                  CNC {cnc.numero} {cnc.codigo ? `— ${cnc.codigo}` : ''}
+                  CNC {cnc.numero}{cnc.codigo ? ` — ${cnc.codigo}` : ''}
                 </div>
-                {cnc.tempo > 0 && (
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                    ⏱️ {formatarTempo(cnc.tempo)} de corte
-                  </div>
-                )}
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                  {cnc.chapas || 1} chapa{(cnc.chapas || 1) > 1 ? 's' : ''}
+                  {cnc.tempoPorChapa > 0 ? ` · ${formatarTempo(cnc.tempoPorChapa)}/chapa` : ''}
+                  {cnc.tempoTotal > 0 ? ` · Total: ${formatarTempo(cnc.tempoTotal)}` : ''}
+                </div>
               </div>
               {cncAtivo === idx && (
                 <div style={{
@@ -876,7 +901,7 @@ function ApontarProducao({ usuario }) {
             </div>
           ))}
 
-          {cncAtivoObj && cncAtivoObj.tempo > 0 && (
+          {cncAtivoObj && cncAtivoObj.tempoTotal > 0 && (
             <div style={{
               background: 'rgba(0,229,255,.08)', border: '1px solid rgba(0,229,255,.2)',
               borderRadius: 8, padding: '10px 12px', marginTop: 8,
@@ -884,9 +909,11 @@ function ApontarProducao({ usuario }) {
             }}>
               <div style={{ fontSize: 20 }}>⏱️</div>
               <div>
-                <div style={{ fontSize: 11, color: 'var(--muted)' }}>Tempo do CNC {cncAtivoObj.numero}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                  CNC {cncAtivoObj.numero} · {cncAtivoObj.chapas} chapa{cncAtivoObj.chapas > 1 ? 's' : ''}
+                </div>
                 <div style={{ fontFamily: 'monospace', fontSize: 18, fontWeight: 700, color: 'var(--accent)' }}>
-                  {formatarTempo(cncAtivoObj.tempo)}
+                  {formatarTempo(cncAtivoObj.tempoTotal)}
                 </div>
               </div>
             </div>
@@ -1028,17 +1055,10 @@ function FormOrdens({ usuario, planta }) {
     if (!descricao) { showToast('Descreva o problema!', 'var(--red)'); return }
     if (selectedResps.length === 0) { showToast('Selecione pelo menos um destinatário!', 'var(--red)'); return }
     setEnviando(true)
-
     try {
       const msgWpp = `⚠️ *Novo reporte - CCS Tec*\n\n*Reportado por:* ${usuario?.nome}\n*OP:* ${modal.ordem}\n*Item:* ${modal.item_ccs}\n*Problema:* ${descricao}\n\n*Enviado para:* ${selectedResps.map(r => r.nome).join(', ')}\n*Horário:* ${new Date().toLocaleString('pt-BR')}`
-
       const { data: supervisores } = await supabase.from('responsaveis').select('*').eq('auto_copia', true)
-      const participantes = [
-        usuario?.email,
-        ...selectedResps.map(r => r.email),
-        ...(supervisores || []).map(s => s.email)
-      ].filter(Boolean)
-
+      const participantes = [usuario?.email, ...selectedResps.map(r => r.email), ...(supervisores || []).map(s => s.email)].filter(Boolean)
       for (const resp of selectedResps) {
         await supabase.from('apontamentos').insert({
           ordem: modal.ordem, item: modal.item_ccs,
@@ -1055,7 +1075,6 @@ function FormOrdens({ usuario, planta }) {
         } catch (e) { console.warn(e) }
         if (resp.telefone) await enviarWhatsApp(resp.telefone, msgWpp)
       }
-
       for (const sup of supervisores || []) {
         try {
           await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
@@ -1067,7 +1086,6 @@ function FormOrdens({ usuario, planta }) {
         } catch (e) { console.warn(e) }
         if (sup.telefone) await enviarWhatsApp(sup.telefone, msgWpp)
       }
-
       await enviarWhatsApp(VICTOR_WHATSAPP, msgWpp)
       setModal(null)
       showToast(`✅ Enviado para ${selectedResps.map(r => r.nome.split(' ')[0]).join(', ')}!`)
@@ -1132,14 +1150,12 @@ function FormOrdens({ usuario, planta }) {
                     <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 13, color: 'var(--yellow)', flex: 1 }}>{nomeOp(op)}</div>
                     <div style={{ fontSize: 12, color: 'var(--muted)' }}>{rows.length} ordem(s)</div>
                   </div>
-
                   {rows.map((r, i) => {
                     const ap = r.ultimoApont
                     const dias = ap ? diasParado(ap.data_apontamento) : null
                     const cor = dias === null ? 'var(--red)' : dias === 0 ? 'var(--green)' : dias <= 3 ? 'var(--yellow)' : 'var(--red)'
                     const texto = dias === null ? 'Sem apontamento' : dias === 0 ? 'Hoje' : `${dias}d atrás`
                     const podeInteragir = !usuario?.estab || usuario.estab === 'todas' || r.estab === usuario.estab
-
                     return (
                       <div key={i} style={{ padding: '12px 14px', borderTop: '1px solid var(--border)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1202,7 +1218,6 @@ function FormOrdens({ usuario, planta }) {
                 <X size={20} />
               </button>
             </div>
-
             {loadingDetalhe ? (
               <div style={{ textAlign: 'center', padding: 20, color: 'var(--muted)' }}>Carregando...</div>
             ) : detalhe.apont.length === 0 ? (
@@ -1268,7 +1283,6 @@ function FormOrdens({ usuario, planta }) {
                 <X size={20} />
               </button>
             </div>
-
             {selectedResps.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
                 {selectedResps.map(r => (
@@ -1283,21 +1297,16 @@ function FormOrdens({ usuario, planta }) {
                 ))}
               </div>
             )}
-
             <div className="field">
               <label>Enviar para <span style={{ fontSize: 11, color: 'var(--muted)' }}>(selecione um ou mais)</span></label>
-              <input className="input" value={buscaResp}
-                onChange={e => onBuscaResp(e.target.value)}
-                placeholder="Filtrar por nome..." />
+              <input className="input" value={buscaResp} onChange={e => onBuscaResp(e.target.value)} placeholder="Filtrar por nome..." />
             </div>
-
             <div style={{ background: 'var(--surface2)', borderRadius: 10, overflow: 'hidden', marginBottom: 14, border: '1px solid var(--border)' }}>
               {respFiltrados.map(r => {
                 const selecionado = selectedResps.some(p => p.id === r.id)
                 return (
                   <div key={r.id} onClick={() => toggleResp(r)} style={{
-                    padding: '10px 14px', cursor: 'pointer',
-                    borderBottom: '1px solid var(--border)',
+                    padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)',
                     display: 'flex', alignItems: 'center', gap: 10,
                     background: selecionado ? 'rgba(0,229,255,.08)' : 'transparent'
                   }}>
@@ -1317,14 +1326,12 @@ function FormOrdens({ usuario, planta }) {
                 )
               })}
             </div>
-
             <div className="field">
               <label>Descreva o problema</label>
               <textarea className="input" value={descricao} onChange={e => setDescricao(e.target.value)}
                 placeholder="Ex: peça com defeito, falta material..."
                 style={{ minHeight: 100, resize: 'vertical', fontSize: 14 }} />
             </div>
-
             <button className="btn-primary" onClick={reportar} disabled={enviando}>
               {enviando ? 'Enviando...' : `⚠️ Enviar${selectedResps.length > 0 ? ` para ${selectedResps.length} pessoa(s)` : ''}`}
             </button>
