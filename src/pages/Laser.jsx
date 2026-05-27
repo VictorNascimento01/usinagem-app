@@ -241,8 +241,13 @@ function Sequencia({ planta, usuario }) {
   const [dados, setDados] = useState([])
   const [loading, setLoading] = useState(true)
   const [reportando, setReportando] = useState(null)
+  const [agora, setAgora] = useState(new Date())
 
   useEffect(() => { carregarSequencia() }, [planta])
+  useEffect(() => {
+    const interval = setInterval(() => setAgora(new Date()), 1000)
+    return () => clearInterval(interval)
+  }, [])
 
   async function carregarSequencia() {
     setLoading(true)
@@ -256,11 +261,39 @@ function Sequencia({ planta, usuario }) {
     setLoading(false)
   }
 
+  async function iniciar(job) {
+    const now = new Date().toISOString()
+    await supabase.from('laser_planejamento').update({ iniciado_em: now }).eq('id', job.id)
+    setDados(prev => prev.map(d => d.id === job.id ? { ...d, iniciado_em: now } : d))
+  }
+
   async function marcarChapa(job) {
     const novas = (job.chapas_feitas || 0) + 1
     const finalizado = novas >= job.chapas_cortar
-    await supabase.from('laser_planejamento').update({ chapas_feitas: novas, finalizado }).eq('id', job.id)
-    setDados(prev => prev.map(d => d.id === job.id ? { ...d, chapas_feitas: novas, finalizado } : d).filter(d => !d.finalizado))
+    const update = { chapas_feitas: novas, finalizado }
+    if (finalizado) update.finalizado_em = new Date().toISOString()
+    await supabase.from('laser_planejamento').update(update).eq('id', job.id)
+    setDados(prev => prev.map(d => d.id === job.id ? { ...d, ...update } : d).filter(d => !d.finalizado))
+  }
+
+  function formatarCronometro(job) {
+    if (!job.iniciado_em) return null
+    const inicio = new Date(job.iniciado_em)
+    const diff = Math.floor((agora - inicio) / 1000)
+    const h = Math.floor(diff / 3600)
+    const m = Math.floor((diff % 3600) / 60)
+    const s = diff % 60
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  }
+
+  function calcularPerformance(job) {
+    if (!job.iniciado_em || !job.tempo_chapa) return null
+    const inicio = new Date(job.iniciado_em)
+    const decorrido = Math.floor((agora - inicio) / 60000)
+    if (decorrido === 0) return null
+    const previsto = (job.chapas_cortar || job.total_chapas || 0) * job.tempo_chapa
+    const perf = Math.round((previsto / decorrido) * 100)
+    return { decorrido, previsto, perf: Math.min(perf, 999) }
   }
 
   const porMaquina = {}
@@ -310,6 +343,9 @@ function Sequencia({ planta, usuario }) {
             const chapasTotal = job.chapas_cortar || job.total_chapas || 0
             const tempoRestante = job.tempo_chapa ? (chapasTotal - chapasFeitas) * job.tempo_chapa : null
             const previsao = tempoRestante ? previsaoTermino(tempoRestante) : null
+            const cronometro = formatarCronometro(job)
+            const perf = calcularPerformance(job)
+            const iniciado = !!job.iniciado_em
 
             return (
               <div key={job.id} style={{ padding: '14px 16px', borderTop: '1px solid var(--border)' }}>
@@ -340,9 +376,37 @@ function Sequencia({ planta, usuario }) {
                       )}
                     </div>
 
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 2 }}>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>
                       👤 {job.usuario_nome} · {formatarHora(job.criado_em)}
                     </div>
+
+                    {/* Cronômetro */}
+                    {iniciado && cronometro && (
+                      <div style={{
+                        background: 'rgba(0,229,255,.08)', border: '1px solid rgba(0,229,255,.2)',
+                        borderRadius: 8, padding: '8px 12px', marginBottom: 8,
+                        display: 'flex', alignItems: 'center', gap: 10
+                      }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 2 }}>⏱️ Em corte</div>
+                          <div style={{ fontFamily: 'monospace', fontSize: 20, fontWeight: 700, color: 'var(--accent)', letterSpacing: 2 }}>
+                            {cronometro}
+                          </div>
+                        </div>
+                        {perf && (
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 2 }}>Performance</div>
+                            <div style={{
+                              fontFamily: 'monospace', fontSize: 18, fontWeight: 700,
+                              color: perf.perf >= 100 ? 'var(--green)' : perf.perf >= 80 ? 'var(--yellow)' : 'var(--red)'
+                            }}>
+                              {perf.perf >= 110 ? '🚀' : perf.perf >= 100 ? '🟢' : perf.perf >= 80 ? '🟡' : '🔴'} {perf.perf}%
+                            </div>
+                            <div style={{ fontSize: 10, color: 'var(--muted)' }}>previsto {formatarTempo(perf.previsto)}</div>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {tempoRestante !== null && (
                       <div style={{ fontSize: 11, color: 'var(--accent)', marginBottom: 4, display: 'flex', gap: 10 }}>
@@ -355,6 +419,13 @@ function Sequencia({ planta, usuario }) {
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {!iniciado && (
+                      <button onClick={() => iniciar(job)} style={{
+                        background: 'rgba(0,229,255,.15)', border: '1px solid rgba(0,229,255,.4)',
+                        borderRadius: 8, padding: '6px 8px', cursor: 'pointer',
+                        color: 'var(--accent)', fontSize: 11, fontWeight: 700
+                      }}>▶ Iniciar</button>
+                    )}
                     <button onClick={() => marcarChapa(job)} style={{
                       background: 'rgba(0,255,136,.15)', border: '1px solid rgba(0,255,136,.3)',
                       borderRadius: 8, padding: '6px 8px', cursor: 'pointer',
@@ -411,6 +482,13 @@ function Planejamentos({ planta, usuario }) {
     const { data } = await q
     setPlanejamentos(data || [])
     setLoading(false)
+  }
+
+  async function excluir(id) {
+    if (!confirm('Excluir este planejamento?')) return
+    await supabase.from('laser_planejamento').delete().eq('id', id)
+    showToast('🗑️ Planejamento excluído!')
+    carregarPlanejamentos()
   }
 
   async function abrirDetalhe(plan) {
@@ -497,17 +575,16 @@ function Planejamentos({ planta, usuario }) {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {isLiderOuMais && (
-                    <button onClick={() => abrirEdicao(p)} style={{
-                      background: 'rgba(0,229,255,.1)', border: '1px solid rgba(0,229,255,.3)',
-                      borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: 'var(--accent)'
-                    }}>
-                      <Pencil size={14} />
-                    </button>
+                    <>
+                      <button onClick={() => abrirEdicao(p)} style={{ background: 'rgba(0,229,255,.1)', border: '1px solid rgba(0,229,255,.3)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: 'var(--accent)' }}>
+                        <Pencil size={14} />
+                      </button>
+                      <button onClick={() => excluir(p.id)} style={{ background: 'rgba(255,61,90,.1)', border: '1px solid rgba(255,61,90,.3)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: 'var(--red)' }}>
+                        🗑️
+                      </button>
+                    </>
                   )}
-                  <button onClick={() => setReportando({ job: p.job, maquina: p.maquina })} style={{
-                    background: 'rgba(255,107,53,.15)', border: '1px solid rgba(255,107,53,.4)',
-                    borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: '#ff6b35'
-                  }}>
+                  <button onClick={() => setReportando({ job: p.job, maquina: p.maquina })} style={{ background: 'rgba(255,107,53,.15)', border: '1px solid rgba(255,107,53,.4)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: '#ff6b35' }}>
                     <AlertTriangle size={14} />
                   </button>
                 </div>
@@ -530,23 +607,42 @@ function Planejamentos({ planta, usuario }) {
                     <div style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700 }}>{p.job}</div>
                     <span style={{ background: 'rgba(0,255,136,.2)', color: 'var(--green)', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4 }}>✅ Finalizado</span>
                     {p.tipo === 'parcial' && <span style={{ background: 'rgba(255,107,53,.2)', color: '#ff6b35', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4 }}>⚡ Parcial</span>}
+                    {p.iniciado_em && p.finalizado_em && (() => {
+                      const min = Math.floor((new Date(p.finalizado_em) - new Date(p.iniciado_em)) / 60000)
+                      const previsto = (p.chapas_cortar || p.total_chapas || 0) * (p.tempo_chapa || 0)
+                      const perf = previsto > 0 ? Math.round((previsto / min) * 100) : null
+                      if (!perf) return null
+                      return (
+                        <span style={{
+                          background: perf >= 100 ? 'rgba(0,255,136,.2)' : perf >= 80 ? 'rgba(255,214,10,.2)' : 'rgba(255,61,90,.2)',
+                          color: perf >= 100 ? 'var(--green)' : perf >= 80 ? 'var(--yellow)' : 'var(--red)',
+                          fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4
+                        }}>
+                          {perf >= 110 ? '🚀' : perf >= 100 ? '🟢' : perf >= 80 ? '🟡' : '🔴'} {Math.min(perf, 999)}%
+                        </span>
+                      )
+                    })()}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--muted)' }}>🖨️ {p.maquina} · {p.total_chapas} chapas · {nomeTurno(p.turno)}</div>
                   <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>👤 {p.usuario_nome} · {formatarData(p.criado_em)}</div>
+                  {p.iniciado_em && p.finalizado_em && (
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                      ⏱️ Duração: {formatarTempo(Math.floor((new Date(p.finalizado_em) - new Date(p.iniciado_em)) / 60000))}
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {isLiderOuMais && (
-                    <button onClick={() => abrirEdicao(p)} style={{
-                      background: 'rgba(0,229,255,.1)', border: '1px solid rgba(0,229,255,.3)',
-                      borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: 'var(--accent)'
-                    }}>
-                      <Pencil size={14} />
-                    </button>
+                    <>
+                      <button onClick={() => abrirEdicao(p)} style={{ background: 'rgba(0,229,255,.1)', border: '1px solid rgba(0,229,255,.3)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: 'var(--accent)' }}>
+                        <Pencil size={14} />
+                      </button>
+                      <button onClick={() => excluir(p.id)} style={{ background: 'rgba(255,61,90,.1)', border: '1px solid rgba(255,61,90,.3)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: 'var(--red)' }}>
+                        🗑️
+                      </button>
+                    </>
                   )}
-                  <button onClick={() => setReportando({ job: p.job, maquina: p.maquina })} style={{
-                    background: 'rgba(255,107,53,.15)', border: '1px solid rgba(255,107,53,.4)',
-                    borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: '#ff6b35'
-                  }}>
+                  <button onClick={() => setReportando({ job: p.job, maquina: p.maquina })} style={{ background: 'rgba(255,107,53,.15)', border: '1px solid rgba(255,107,53,.4)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: '#ff6b35' }}>
                     <AlertTriangle size={14} />
                   </button>
                 </div>
@@ -605,14 +701,9 @@ function Planejamentos({ planta, usuario }) {
                 <div style={{ fontWeight: 700, fontSize: 14 }}>Editar planejamento</div>
                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>Job {editando.job}</div>
               </div>
-              <button onClick={() => setEditando(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}>
-                <X size={20} />
-              </button>
+              <button onClick={() => setEditando(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}><X size={20} /></button>
             </div>
-            <div className="field">
-              <label>Máquina</label>
-              <input className="input" value={editando.maquina || ''} onChange={e => setEditando(p => ({ ...p, maquina: e.target.value }))} />
-            </div>
+            <div className="field"><label>Máquina</label><input className="input" value={editando.maquina || ''} onChange={e => setEditando(p => ({ ...p, maquina: e.target.value }))} /></div>
             <div className="field">
               <label>Turno</label>
               <select className="input" value={editando.turno || '1'} onChange={e => setEditando(p => ({ ...p, turno: e.target.value }))}>
@@ -621,20 +712,11 @@ function Planejamentos({ planta, usuario }) {
                 <option value="3">3º Turno</option>
               </select>
             </div>
+            <div className="field"><label>Total de chapas</label><input className="input" type="number" value={editando.total_chapas || ''} onChange={e => setEditando(p => ({ ...p, total_chapas: e.target.value }))} min="1" /></div>
+            <div className="field"><label>Chapas a cortar</label><input className="input" type="number" value={editando.chapas_cortar || ''} onChange={e => setEditando(p => ({ ...p, chapas_cortar: e.target.value }))} min="1" /></div>
+            <div className="field"><label>Chapas feitas</label><input className="input" type="number" value={editando.chapas_feitas || 0} onChange={e => setEditando(p => ({ ...p, chapas_feitas: parseInt(e.target.value) || 0 }))} min="0" /></div>
             <div className="field">
-              <label>Total de chapas</label>
-              <input className="input" type="number" value={editando.total_chapas || ''} onChange={e => setEditando(p => ({ ...p, total_chapas: e.target.value }))} min="1" />
-            </div>
-            <div className="field">
-              <label>Chapas a cortar</label>
-              <input className="input" type="number" value={editando.chapas_cortar || ''} onChange={e => setEditando(p => ({ ...p, chapas_cortar: e.target.value }))} min="1" />
-            </div>
-            <div className="field">
-              <label>Chapas feitas</label>
-              <input className="input" type="number" value={editando.chapas_feitas || 0} onChange={e => setEditando(p => ({ ...p, chapas_feitas: parseInt(e.target.value) || 0 }))} min="0" />
-            </div>
-            <div className="field">
-              <label>Tempo por chapa (CNC) <span style={{ fontSize: 11, color: 'var(--muted)' }}>(opcional)</span></label>
+              <label>Tempo por chapa <span style={{ fontSize: 11, color: 'var(--muted)' }}>(opcional)</span></label>
               <div style={{ display: 'flex', gap: 8 }}>
                 <div style={{ flex: 1 }}>
                   <input className="input" type="number" value={editTempoH} onChange={e => setEditTempoH(e.target.value)} placeholder="0" min="0" />
