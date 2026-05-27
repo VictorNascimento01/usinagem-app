@@ -2,18 +2,13 @@ import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
-// Capacidade de cada turno em minutos
-const TURNOS = {
-  '1': { label: '1º Turno', min: 588, cor: 'var(--accent)', inicio: '07:00', fim: '16:48' },
-  '2': { label: '2º Turno', min: 561, cor: 'var(--yellow)', inicio: '16:48', fim: '02:09' },
-  '3': { label: '3º Turno', min: 531, cor: '#7c3aed', inicio: '02:09', fim: '07:00' },
-}
+const TURNOS_MIN = { '1': 528, '2': 501, '3': 276 }
+const CAP_DIA = 528 + 501 + 276 // 1305 min
 
-const TOTAL_DIA = TURNOS['1'].min + TURNOS['2'].min + TURNOS['3'].min // 1680 min = 28h
-
-const CORES_JOBS = [
+const CORES = [
   '#00e5ff', '#00ff88', '#ffd60a', '#ff6b35', '#7c3aed',
-  '#ff3d5a', '#06d6a0', '#f72585', '#4361ee', '#4cc9f0'
+  '#ff3d5a', '#06d6a0', '#f72585', '#4361ee', '#4cc9f0',
+  '#fb5607', '#8338ec', '#3a86ff', '#06d6a0', '#ffbe0b'
 ]
 
 function formatarTempo(minutos) {
@@ -25,11 +20,309 @@ function formatarTempo(minutos) {
   return `${h}h${m}min`
 }
 
-function previsaoTermino(minutosRestantes) {
-  if (!minutosRestantes || minutosRestantes <= 0) return null
-  const agora = new Date()
-  agora.setMinutes(agora.getMinutes() + minutosRestantes)
-  return agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+function proximosDiasUteis(n = 7, inicio = new Date()) {
+  const dias = []
+  const d = new Date(inicio)
+  d.setHours(0, 0, 0, 0)
+  while (dias.length < n) {
+    const dow = d.getDay()
+    if (dow !== 0 && dow !== 6) dias.push(new Date(d))
+    d.setDate(d.getDate() + 1)
+  }
+  return dias
+}
+
+function semanasDoMes() {
+  const hoje = new Date()
+  const ano = hoje.getFullYear()
+  const mes = hoje.getMonth()
+  const semanas = []
+  let d = new Date(ano, mes, 1)
+  while (d.getMonth() === mes) {
+    const inicio = new Date(d)
+    const fim = new Date(d)
+    fim.setDate(fim.getDate() + 6)
+    if (fim.getMonth() !== mes) fim.setDate(new Date(ano, mes + 1, 0).getDate())
+    semanas.push({ inicio: new Date(inicio), fim: new Date(fim) })
+    d.setDate(d.getDate() + 7)
+  }
+  return semanas
+}
+
+function distribuirNoDias(tarefas, dias) {
+  const resultado = {}
+  dias.forEach(d => { resultado[d.toISOString().split('T')[0]] = [] })
+
+  let diaIdx = 0
+  let minUsado = 0
+
+  for (const t of tarefas) {
+    let restante = t.tempo || 0
+    if (restante <= 0) continue
+
+    while (restante > 0 && diaIdx < dias.length) {
+      const key = dias[diaIdx].toISOString().split('T')[0]
+      const capRestante = CAP_DIA - minUsado
+
+      if (capRestante <= 0) { diaIdx++; minUsado = 0; continue }
+
+      if (minUsado + restante <= CAP_DIA) {
+        resultado[key].push({ ...t, tempoNoDia: restante })
+        minUsado += restante
+        restante = 0
+      } else {
+        diaIdx++; minUsado = 0
+      }
+    }
+  }
+  return resultado
+}
+
+function corOcupacao(pct) {
+  if (pct >= 90) return 'var(--red)'
+  if (pct >= 70) return 'var(--yellow)'
+  return 'var(--green)'
+}
+
+function GraficoBarrasSemana({ tarefas, maquina }) {
+  const dias = proximosDiasUteis(7)
+  const distribuicao = distribuirNoDias(tarefas, dias)
+  const ALTURA = 200
+  const escala = ALTURA / CAP_DIA
+  const posT1 = TURNOS_MIN['1'] * escala
+  const posT2 = (TURNOS_MIN['1'] + TURNOS_MIN['2']) * escala
+
+  const tarefaCores = {}
+  tarefas.forEach((t, i) => { tarefaCores[t.tarefa] = CORES[i % CORES.length] })
+
+  return (
+    <div>
+      {/* Legenda turnos */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+        {[
+          { cor: 'var(--accent)', label: `1º T (${formatarTempo(TURNOS_MIN['1'])})` },
+          { cor: 'var(--yellow)', label: `2º T (${formatarTempo(TURNOS_MIN['2'])})` },
+          { cor: '#7c3aed', label: `3º T (${formatarTempo(TURNOS_MIN['3'])})` },
+        ].map(({ cor, label }) => (
+          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <div style={{ width: 14, height: 2, borderTop: `2px dashed ${cor}` }} />
+            <span style={{ fontSize: 9, color: cor, fontWeight: 700 }}>{label}</span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end' }}>
+        {/* Eixo Y mínimo */}
+        <div style={{ width: 6, height: ALTURA, flexShrink: 0, position: 'relative' }}>
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 1, background: 'var(--border)' }} />
+        </div>
+
+        {dias.map((dia, diaIdx) => {
+          const key = dia.toISOString().split('T')[0]
+          const segs = distribuicao[key] || []
+          const totalDia = segs.reduce((s, sg) => s + sg.tempoNoDia, 0)
+          const pct = Math.round((totalDia / CAP_DIA) * 100)
+          const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
+          const ehHoje = dia.getTime() === hoje.getTime()
+          const nomeDia = dia.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit' })
+
+          return (
+            <div key={key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div style={{
+                position: 'relative', height: ALTURA, width: '90%',
+                background: 'var(--surface2)', borderRadius: '4px 4px 0 0',
+                border: ehHoje ? '1px solid rgba(0,229,255,.4)' : '1px solid var(--border)',
+                overflow: 'visible'
+              }}>
+                {/* Fundo turnos */}
+                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: posT1, background: 'rgba(0,229,255,.04)' }} />
+                <div style={{ position: 'absolute', bottom: posT1, left: 0, right: 0, height: posT2 - posT1, background: 'rgba(255,214,10,.04)' }} />
+                <div style={{ position: 'absolute', bottom: posT2, left: 0, right: 0, height: ALTURA - posT2, background: 'rgba(124,58,237,.04)' }} />
+
+                {/* Linhas tracejadas */}
+                {[posT1, posT2].map((pos, i) => (
+                  <div key={i} style={{ position: 'absolute', bottom: pos, left: 0, right: 0, borderTop: `1px dashed ${i === 0 ? 'var(--accent)' : 'var(--yellow)'}`, zIndex: 2, opacity: 0.5 }} />
+                ))}
+
+                {/* Barras empilhadas */}
+                {(() => {
+                  let acum = 0
+                  return segs.map((sg, i) => {
+                    const bottom = acum * escala
+                    const height = Math.max(sg.tempoNoDia * escala, 3)
+                    acum += sg.tempoNoDia
+                    return (
+                      <div key={sg.tarefa + i} style={{
+                        position: 'absolute', bottom, left: 2, right: 2, height,
+                        background: tarefaCores[sg.tarefa],
+                        borderRadius: i === segs.length - 1 ? '3px 3px 0 0' : 1,
+                        zIndex: 3, opacity: 0.85,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden'
+                      }}>
+                        {height > 14 && <span style={{ fontSize: 7, fontWeight: 700, color: '#000' }}>{sg.tarefa}</span>}
+                      </div>
+                    )
+                  })
+                })()}
+              </div>
+
+              <div style={{ fontSize: 8, color: ehHoje ? 'var(--accent)' : 'var(--muted)', fontWeight: ehHoje ? 700 : 400, textAlign: 'center', marginTop: 3, lineHeight: 1.3 }}>
+                {nomeDia.replace('.', '')}
+              </div>
+              {totalDia > 0 && (
+                <div style={{ fontSize: 8, fontWeight: 700, color: corOcupacao(pct), marginTop: 1 }}>{pct}%</div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Legenda tarefas */}
+      <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+        {tarefas.slice(0, 10).map(t => (
+          <div key={t.tarefa} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            <div style={{ width: 8, height: 8, borderRadius: 2, background: tarefaCores[t.tarefa] }} />
+            <span style={{ fontSize: 9, color: 'var(--muted)' }}>{t.tarefa} ({formatarTempo(t.tempo)})</span>
+          </div>
+        ))}
+        {tarefas.length > 10 && <span style={{ fontSize: 9, color: 'var(--muted)' }}>+{tarefas.length - 10} mais</span>}
+      </div>
+    </div>
+  )
+}
+
+function GraficoBarrasMes({ tarefas }) {
+  const semanas = semanasDoMes()
+  const ALTURA = 200
+
+  // Calcula capacidade por semana (dias úteis × CAP_DIA)
+  const capSemana = semanas.map(s => {
+    let dias = 0
+    const d = new Date(s.inicio)
+    while (d <= s.fim) {
+      const dow = d.getDay()
+      if (dow !== 0 && dow !== 6) dias++
+      d.setDate(d.getDate() + 1)
+    }
+    return { ...s, cap: dias * CAP_DIA, dias }
+  })
+
+  const maxCap = Math.max(...capSemana.map(s => s.cap))
+  const escala = ALTURA / maxCap
+
+  // Distribui tarefas nas semanas
+  const tarefasSemana = semanas.map((s, idx) => {
+    const dias = proximosDiasUteis(capSemana[idx].dias, s.inicio)
+    const dist = distribuirNoDias(tarefas, dias)
+    const total = Object.values(dist).reduce((sum, segs) => sum + segs.reduce((s2, sg) => s2 + sg.tempoNoDia, 0), 0)
+    return { ...s, total, cap: capSemana[idx].cap }
+  })
+
+  const tarefaCores = {}
+  tarefas.forEach((t, i) => { tarefaCores[t.tarefa] = CORES[i % CORES.length] })
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', marginTop: 8 }}>
+        <div style={{ width: 6, flexShrink: 0 }} />
+        {tarefasSemana.map((s, idx) => {
+          const pct = s.cap > 0 ? Math.round((s.total / s.cap) * 100) : 0
+          const barH = Math.min(s.total * escala, ALTURA)
+          const label = `S${idx + 1} ${s.inicio.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`
+          const hoje = new Date()
+          const ehAtual = hoje >= s.inicio && hoje <= s.fim
+
+          return (
+            <div key={idx} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div style={{
+                position: 'relative', height: ALTURA, width: '85%',
+                background: 'var(--surface2)', borderRadius: '4px 4px 0 0',
+                border: ehAtual ? '1px solid rgba(0,229,255,.4)' : '1px solid var(--border)',
+              }}>
+                {/* Linha capacidade */}
+                <div style={{
+                  position: 'absolute', bottom: s.cap * escala > ALTURA ? ALTURA : s.cap * escala,
+                  left: 0, right: 0, borderTop: '1px dashed rgba(255,255,255,.2)', zIndex: 2
+                }} />
+
+                {/* Barra de ocupação */}
+                <div style={{
+                  position: 'absolute', bottom: 0, left: 2, right: 2,
+                  height: barH,
+                  background: corOcupacao(pct),
+                  borderRadius: '3px 3px 0 0',
+                  opacity: 0.7, zIndex: 3
+                }} />
+              </div>
+              <div style={{ fontSize: 8, color: ehAtual ? 'var(--accent)' : 'var(--muted)', fontWeight: ehAtual ? 700 : 400, textAlign: 'center', marginTop: 3, lineHeight: 1.3 }}>
+                {label}
+              </div>
+              <div style={{ fontSize: 8, fontWeight: 700, color: corOcupacao(pct), marginTop: 1 }}>
+                {pct > 0 ? `${pct}%` : '—'}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <div style={{ marginTop: 8, fontSize: 10, color: 'var(--muted)', textAlign: 'center' }}>
+        Capacidade por semana: {capSemana.map((s, i) => `S${i + 1}: ${formatarTempo(s.cap)}`).join(' · ')}
+      </div>
+    </div>
+  )
+}
+
+function ModalMaquina({ maquina, tarefas, onClose }) {
+  const [aba, setAba] = useState('semana')
+  const totalMin = tarefas.reduce((s, t) => s + t.tempo, 0)
+  const diasNecessarios = Math.ceil(totalMin / CAP_DIA)
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200 }}>
+      <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 16, color: 'var(--yellow)' }}>{maquina.toUpperCase()}</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>{tarefas.length} tarefa(s) · {formatarTempo(totalMin)} total · ~{diasNecessarios} dia(s)</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', gap: 6, padding: '12px 16px 0', flexShrink: 0 }}>
+          {[
+            { key: 'semana', label: '📅 Semana' },
+            { key: 'mes', label: '🗓️ Mês' },
+          ].map(({ key, label }) => (
+            <button key={key} onClick={() => setAba(key)} style={{
+              flex: 1, padding: '8px', border: '1px solid',
+              borderColor: aba === key ? 'var(--accent)' : 'var(--border)',
+              background: aba === key ? 'rgba(0,229,255,.1)' : 'var(--surface2)',
+              color: aba === key ? 'var(--accent)' : 'var(--muted)',
+              borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer'
+            }}>{label}</button>
+          ))}
+        </div>
+
+        <div style={{ overflowY: 'auto', flex: 1, padding: 16 }}>
+          {aba === 'semana' && <GraficoBarrasSemana tarefas={tarefas} maquina={maquina} />}
+          {aba === 'mes' && <GraficoBarrasMes tarefas={tarefas} />}
+
+          {/* Lista de tarefas */}
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Tarefas</div>
+            {tarefas.map((t, i) => (
+              <div key={t.tarefa} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ width: 8, height: 8, borderRadius: 2, background: CORES[i % CORES.length], flexShrink: 0 }} />
+                <div style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700, flex: 1 }}>{t.tarefa}</div>
+                <div style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 700 }}>{formatarTempo(t.tempo)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function GaugeCircular({ valor, max = 100, cor, label, sublabel, onClick }) {
@@ -48,10 +341,7 @@ function GaugeCircular({ valor, max = 100, cor, label, sublabel, onClick }) {
             strokeLinecap="round"
             style={{ transition: 'stroke-dashoffset .8s ease' }} />
         </svg>
-        <div style={{
-          position: 'absolute', inset: 0, display: 'flex',
-          flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
-        }}>
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ fontFamily: 'monospace', fontSize: 22, fontWeight: 700, color: cor }}>{pct}%</div>
           {sublabel && <div style={{ fontSize: 10, color: 'var(--muted)' }}>{sublabel}</div>}
         </div>
@@ -83,230 +373,67 @@ function Modal({ titulo, subtitulo, onClose, children }) {
   )
 }
 
-// Gráfico vertical de carga máquina
-function GraficoCargaMaquina({ maquina, jobs }) {
-  const ALTURA = 320 // px total do gráfico
-  const T1_MIN = TURNOS['1'].min
-  const T2_MIN = TURNOS['2'].min
-  const T3_MIN = TURNOS['3'].min
-
-  // Total de minutos programados para essa máquina
-  const totalMin = jobs.reduce((s, j) => s + (j.tempoTotalJob || 0), 0)
-  const maxMin = TOTAL_DIA
-  const escala = ALTURA / maxMin // px por minuto
-
-  // Posições das linhas de turno (de baixo pra cima)
-  const posT1 = T1_MIN * escala        // fim do T1
-  const posT2 = (T1_MIN + T2_MIN) * escala  // fim do T2
-  const posT3 = maxMin * escala         // fim do T3
-
-  // Cor por job
-  const jobCores = {}
-  jobs.forEach((j, i) => { jobCores[j.id] = CORES_JOBS[i % CORES_JOBS.length] })
-
-  // Monta segmentos de barras (de baixo pra cima)
-  let acumulado = 0
-  const segmentos = jobs.map(j => {
-    const tempo = j.tempoTotalJob || 0
-    const inicio = acumulado
-    acumulado += tempo
-    return { job: j, inicio, fim: acumulado, tempo }
-  })
-
-  const pctUsado = Math.round((totalMin / maxMin) * 100)
-  const corPct = pctUsado > 100 ? 'var(--red)' : pctUsado > 80 ? 'var(--yellow)' : 'var(--green)'
-
-  return (
-    <div className="card" style={{ marginBottom: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--yellow)' }} />
-        <div style={{ fontFamily: 'monospace', fontSize: 15, fontWeight: 700, color: 'var(--yellow)', flex: 1 }}>
-          {maquina.toUpperCase()}
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontFamily: 'monospace', fontSize: 16, fontWeight: 700, color: corPct }}>{pctUsado}%</div>
-          <div style={{ fontSize: 10, color: 'var(--muted)' }}>{formatarTempo(totalMin)} / {formatarTempo(maxMin)}</div>
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-        {/* Eixo Y com labels de tempo */}
-        <div style={{ position: 'relative', height: ALTURA, width: 36, flexShrink: 0 }}>
-          {/* Labels dos turnos */}
-          {[
-            { pos: 0, label: '0h' },
-            { pos: posT1, label: '9h48' },
-            { pos: posT2, label: '19h09' },
-            { pos: posT3, label: '28h' },
-          ].map(({ pos, label }) => (
-            <div key={label} style={{
-              position: 'absolute', bottom: pos,
-              fontSize: 9, color: 'var(--muted)',
-              transform: 'translateY(50%)',
-              right: 4, textAlign: 'right', whiteSpace: 'nowrap'
-            }}>{label}</div>
-          ))}
-        </div>
-
-        {/* Gráfico */}
-        <div style={{ position: 'relative', height: ALTURA, flex: 1 }}>
-
-          {/* Linhas tracejadas dos turnos */}
-          {[
-            { pos: posT1, cor: TURNOS['1'].cor, label: TURNOS['1'].label },
-            { pos: posT2, cor: TURNOS['2'].cor, label: TURNOS['2'].label },
-            { pos: posT3, cor: TURNOS['3'].cor, label: TURNOS['3'].label },
-          ].map(({ pos, cor, label }) => (
-            <div key={label} style={{
-              position: 'absolute', bottom: pos, left: 0, right: 0,
-              borderTop: `1.5px dashed ${cor}`,
-              zIndex: 2
-            }}>
-              <span style={{
-                position: 'absolute', right: 0, top: -16,
-                fontSize: 9, color: cor, fontWeight: 700,
-                background: 'var(--surface)', padding: '0 3px'
-              }}>{label}</span>
-            </div>
-          ))}
-
-          {/* Área de fundo dos turnos */}
-          <div style={{
-            position: 'absolute', bottom: 0, left: 0, right: 0,
-            height: posT1, background: `${TURNOS['1'].cor}08`,
-            borderLeft: `2px solid ${TURNOS['1'].cor}33`
-          }} />
-          <div style={{
-            position: 'absolute', bottom: posT1, left: 0, right: 0,
-            height: posT2 - posT1, background: `${TURNOS['2'].cor}08`,
-            borderLeft: `2px solid ${TURNOS['2'].cor}33`
-          }} />
-          <div style={{
-            position: 'absolute', bottom: posT2, left: 0, right: 0,
-            height: posT3 - posT2, background: `${'#7c3aed'}08`,
-            borderLeft: `2px solid ${'#7c3aed'}33`
-          }} />
-
-          {/* Barras dos jobs */}
-          {segmentos.map(({ job, inicio, fim, tempo }) => {
-            const bottom = inicio * escala
-            const height = Math.max(tempo * escala, 4)
-            const cor = jobCores[job.id]
-            const extrapolou = fim > maxMin
-
-            return (
-              <div key={job.id} style={{
-                position: 'absolute',
-                bottom, left: 8, right: 8,
-                height,
-                background: extrapolou ? 'var(--red)' : cor,
-                borderRadius: 4,
-                zIndex: 3,
-                opacity: 0.85,
-                display: 'flex', alignItems: 'center',
-                padding: '0 6px',
-                overflow: 'hidden'
-              }}>
-                {height > 18 && (
-                  <span style={{
-                    fontSize: 9, fontWeight: 700, color: '#000',
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-                  }}>
-                    {job.job} · {formatarTempo(tempo)}
-                  </span>
-                )}
-              </div>
-            )
-          })}
-
-          {/* Indicador de overflow */}
-          {totalMin > maxMin && (
-            <div style={{
-              position: 'absolute', top: -24, left: 0, right: 0,
-              background: 'rgba(255,61,90,.15)', border: '1px solid rgba(255,61,90,.4)',
-              borderRadius: 6, padding: '3px 8px',
-              fontSize: 10, color: 'var(--red)', fontWeight: 700, textAlign: 'center'
-            }}>
-              ⚠️ Excede capacidade diária em {formatarTempo(totalMin - maxMin)}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Legenda */}
-      <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {jobs.map(j => (
-          <div key={j.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <div style={{ width: 10, height: 10, borderRadius: 2, background: jobCores[j.id], flexShrink: 0 }} />
-            <span style={{ fontSize: 10, color: 'var(--muted)' }}>{j.job} ({formatarTempo(j.tempoTotalJob || 0)})</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Resumo por turno */}
-      <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
-        {['1', '2', '3'].map(t => {
-          const capMin = TURNOS[t].min
-          const usadoMin = Math.min(totalMin, capMin)
-          const pct = Math.round((usadoMin / capMin) * 100)
-          return (
-            <div key={t} style={{
-              background: 'var(--surface2)', borderRadius: 8, padding: '8px',
-              border: `1px solid ${TURNOS[t].cor}33`
-            }}>
-              <div style={{ fontSize: 9, color: TURNOS[t].cor, fontWeight: 700, marginBottom: 4 }}>
-                {TURNOS[t].label}
-              </div>
-              <div style={{ height: 4, background: 'var(--surface)', borderRadius: 99, overflow: 'hidden', marginBottom: 4 }}>
-                <div style={{ height: '100%', width: `${Math.min(pct, 100)}%`, background: TURNOS[t].cor, borderRadius: 99 }} />
-              </div>
-              <div style={{ fontSize: 9, color: 'var(--muted)' }}>
-                {pct > 100 ? '🔴 Cheio' : pct > 80 ? '🟡 Quase' : `🟢 ${100 - pct}% livre`}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
 export default function Indicadores({ usuario }) {
   const [planejamentos, setPlanejamentos] = useState([])
   const [apontamentos, setApontamentos] = useState([])
   const [lancamentos, setLancamentos] = useState([])
+  const [nestingPorMaquina, setNestingPorMaquina] = useState({})
   const [loading, setLoading] = useState(true)
   const [agora, setAgora] = useState(new Date())
   const [planta, setPlanta] = useState(usuario?.estab === 'todas' ? '' : usuario?.estab || '')
   const [modal, setModal] = useState(null)
   const [modalData, setModalData] = useState(null)
   const [abaIndicador, setAbaIndicador] = useState('geral')
+  const [maquinaSelecionada, setMaquinaSelecionada] = useState(null)
 
   useEffect(() => {
     carregarDados()
-    const interval = setInterval(() => {
-      setAgora(new Date())
-      carregarDados()
-    }, 60000)
+    const interval = setInterval(() => { setAgora(new Date()); carregarDados() }, 60000)
     return () => clearInterval(interval)
   }, [planta])
 
   async function carregarDados() {
     setLoading(true)
-    const hoje = new Date()
-    hoje.setHours(0, 0, 0, 0)
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
 
     let qPlan = supabase.from('laser_planejamento').select('*').gte('criado_em', hoje.toISOString())
     if (planta) qPlan = qPlan.eq('estab', planta)
     const { data: plans } = await qPlan
 
-    const { data: aponts } = await supabase
-      .from('laser_apontamento').select('*').gte('criado_em', hoje.toISOString())
+    const { data: aponts } = await supabase.from('laser_apontamento').select('*').gte('criado_em', hoje.toISOString())
 
     let qLanc = supabase.from('lancamentos').select('*').gte('criado_em', hoje.toISOString())
     if (planta) qLanc = qLanc.eq('estab', planta)
     const { data: lancs } = await qLanc
 
+    // Busca nesting agrupado por máquina e tarefa
+    let qNesting = supabase.from('nesting').select('maquina, tarefa, tempo_corte_total, estab')
+    if (planta) qNesting = qNesting.eq('estab', planta)
+    const { data: nestingRows } = await qNesting
+
+    // Agrupa por maquina → tarefa (soma tempo_corte_total em horas → converte para min)
+    const porMaquina = {}
+    if (nestingRows) {
+      nestingRows.forEach(row => {
+        const maq = (row.maquina || '—').trim()
+        const tar = (row.tarefa || '—').trim()
+        if (!porMaquina[maq]) porMaquina[maq] = {}
+        if (!porMaquina[maq][tar]) porMaquina[maq][tar] = 0
+        const tempoH = parseFloat(String(row.tempo_corte_total || 0).replace(',', '.')) || 0
+        porMaquina[maq][tar] += tempoH * 60 // converte horas para minutos
+      })
+    }
+
+    // Transforma em array de tarefas por máquina
+    const resultado = {}
+    Object.entries(porMaquina).forEach(([maq, tarefas]) => {
+      resultado[maq] = Object.entries(tarefas)
+        .map(([tarefa, tempo]) => ({ tarefa, tempo: Math.round(tempo) }))
+        .filter(t => t.tempo > 0)
+        .sort((a, b) => b.tempo - a.tempo)
+    })
+
+    setNestingPorMaquina(resultado)
     setPlanejamentos(plans || [])
     setApontamentos(aponts || [])
     setLancamentos(lancs || [])
@@ -318,31 +445,12 @@ export default function Indicadores({ usuario }) {
   const totalChapasPlanejadasHoje = planejamentos.reduce((s, p) => s + (p.chapas_cortar || p.total_chapas || 0), 0)
   const totalChapasFeitas = planejamentos.reduce((s, p) => s + (p.chapas_feitas || 0), 0)
   const pctChapas = totalChapasPlanejadasHoje > 0 ? Math.round((totalChapasFeitas / totalChapasPlanejadasHoje) * 100) : 0
-
   const totalPlanejadoApont = apontamentos.reduce((s, a) => s + (a.qtd_planejada || 0), 0)
   const totalRealApont = apontamentos.reduce((s, a) => s + (a.qtd_real || 0), 0)
   const qualidadeLaser = totalPlanejadoApont > 0 ? Math.round((totalRealApont / totalPlanejadoApont) * 100) : null
-
   const totalPecasLancadas = lancamentos.reduce((s, l) => s + (l.quantidade || 0), 0)
   const lancamentosPorTurno = { '1': 0, '2': 0, '3': 0 }
   lancamentos.forEach(l => { if (l.turno) lancamentosPorTurno[l.turno] += (l.quantidade || 0) })
-
-  // Agrupa por máquina e calcula tempo total por job
-  const porMaquina = {}
-  pendentes.forEach(p => {
-    const maq = p.maquina || '—'
-    if (!porMaquina[maq]) porMaquina[maq] = []
-
-    // Calcula tempo total do job pelos CNCs
-    let tempoTotalJob = 0
-    if (p.cncs && p.cncs.length > 0) {
-      tempoTotalJob = p.cncs.reduce((s, c) => s + (c.tempoTotal || 0), 0)
-    } else if (p.tempo_chapa) {
-      tempoTotalJob = (p.chapas_cortar || p.total_chapas || 0) * p.tempo_chapa
-    }
-
-    porMaquina[maq].push({ ...p, tempoTotalJob })
-  })
 
   const corQ = (q) => q === null ? 'var(--muted)' : q >= 95 ? 'var(--green)' : q >= 80 ? 'var(--yellow)' : 'var(--red)'
   const corP = (pct) => pct >= 80 ? 'var(--green)' : pct >= 40 ? 'var(--accent)' : 'var(--yellow)'
@@ -381,11 +489,7 @@ export default function Indicadores({ usuario }) {
           <h1>INDICADORES</h1>
           <p>Atualizado às {agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
         </div>
-        <button onClick={carregarDados} style={{
-          background: 'var(--surface2)', border: '1px solid var(--border)',
-          borderRadius: 8, padding: '6px 12px', cursor: 'pointer',
-          color: 'var(--muted)', fontSize: 12
-        }}>🔄</button>
+        <button onClick={carregarDados} style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', color: 'var(--muted)', fontSize: 12 }}>🔄</button>
       </div>
 
       {usuario?.estab === 'todas' && (
@@ -410,7 +514,7 @@ export default function Indicadores({ usuario }) {
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         {[
           { key: 'geral', label: '📈 Geral' },
-          { key: 'carga', label: '🖨️ Carga Máquina' },
+          { key: 'carga', label: '🖨️ Carga' },
         ].map(({ key, label }) => (
           <button key={key} onClick={() => setAbaIndicador(key)} style={{
             flex: 1, padding: '10px 4px', border: '1px solid',
@@ -425,21 +529,14 @@ export default function Indicadores({ usuario }) {
       {/* ABA GERAL */}
       {abaIndicador === 'geral' && (
         <>
-          <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
-            ⚡ Laser — hoje
-          </div>
-
+          <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>⚡ Laser — hoje</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 }}>
             {[
               { label: 'Pendentes', valor: pendentes.length, cor: pendentes.length > 0 ? 'var(--yellow)' : 'var(--green)', onClick: () => { setModalData(pendentes); setModal('pendentes') } },
               { label: 'Finalizados', valor: finalizados.length, cor: 'var(--green)', onClick: () => { setModalData(finalizados); setModal('finalizados') } },
               { label: 'Jobs hoje', valor: planejamentos.length, cor: 'var(--accent)', onClick: () => { setModalData(planejamentos); setModal('todos') } },
             ].map(({ label, valor, cor, onClick }) => (
-              <div key={label} onClick={onClick} className="card" style={{ padding: 12, textAlign: 'center', marginBottom: 0, cursor: 'pointer' }}
-                onMouseDown={e => e.currentTarget.style.opacity = '.7'}
-                onMouseUp={e => e.currentTarget.style.opacity = '1'}
-                onTouchStart={e => e.currentTarget.style.opacity = '.7'}
-                onTouchEnd={e => e.currentTarget.style.opacity = '1'}>
+              <div key={label} onClick={onClick} className="card" style={{ padding: 12, textAlign: 'center', marginBottom: 0, cursor: 'pointer' }}>
                 <div style={{ fontSize: 9, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{label}</div>
                 <div style={{ fontFamily: 'monospace', fontSize: 24, fontWeight: 700, color: cor }}>{valor}</div>
                 <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 4 }}>ver ›</div>
@@ -451,51 +548,23 @@ export default function Indicadores({ usuario }) {
             <div className="card" style={{ marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap', gap: 16, padding: '8px 0' }}>
                 {totalChapasPlanejadasHoje > 0 && (
-                  <GaugeCircular
-                    valor={totalChapasFeitas}
-                    max={totalChapasPlanejadasHoje}
-                    cor={corP(pctChapas)}
-                    label="Chapas cortadas"
-                    sublabel={`${totalChapasFeitas}/${totalChapasPlanejadasHoje}`}
-                    onClick={() => { setModalData(planejamentos); setModal('chapas') }}
-                  />
+                  <GaugeCircular valor={totalChapasFeitas} max={totalChapasPlanejadasHoje} cor={corP(pctChapas)} label="Chapas cortadas" sublabel={`${totalChapasFeitas}/${totalChapasPlanejadasHoje}`} onClick={() => { setModalData(planejamentos); setModal('chapas') }} />
                 )}
                 {qualidadeLaser !== null && (
-                  <GaugeCircular
-                    valor={qualidadeLaser}
-                    max={100}
-                    cor={corQ(qualidadeLaser)}
-                    label="Qualidade laser"
-                    sublabel={qualidadeLaser >= 95 ? 'Excelente' : qualidadeLaser >= 80 ? 'Atenção' : 'Abaixo'}
-                    onClick={abrirModalQualidade}
-                  />
+                  <GaugeCircular valor={qualidadeLaser} max={100} cor={corQ(qualidadeLaser)} label="Qualidade laser" sublabel={qualidadeLaser >= 95 ? 'Excelente' : qualidadeLaser >= 80 ? 'Atenção' : 'Abaixo'} onClick={abrirModalQualidade} />
                 )}
               </div>
             </div>
           )}
 
-          {planejamentos.length === 0 && (
-            <div className="empty" style={{ marginBottom: 16 }}>
-              <div className="emoji">⚡</div>
-              <h3>Sem dados laser hoje</h3>
-            </div>
-          )}
+          {planejamentos.length === 0 && <div className="empty" style={{ marginBottom: 16 }}><div className="emoji">⚡</div><h3>Sem dados laser hoje</h3></div>}
 
-          <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12, marginTop: 8 }}>
-            ⚙️ Usinagem — hoje
-          </div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12, marginTop: 8 }}>⚙️ Usinagem — hoje</div>
 
           {lancamentos.length === 0 ? (
-            <div className="empty">
-              <div className="emoji">⚙️</div>
-              <h3>Sem lançamentos hoje</h3>
-            </div>
+            <div className="empty"><div className="emoji">⚙️</div><h3>Sem lançamentos hoje</h3></div>
           ) : (
-            <div onClick={() => { setModalData(lancamentos); setModal('usinagem') }} className="card" style={{ marginBottom: 16, cursor: 'pointer' }}
-              onMouseDown={e => e.currentTarget.style.opacity = '.7'}
-              onMouseUp={e => e.currentTarget.style.opacity = '1'}
-              onTouchStart={e => e.currentTarget.style.opacity = '.7'}
-              onTouchEnd={e => e.currentTarget.style.opacity = '1'}>
+            <div onClick={() => { setModalData(lancamentos); setModal('usinagem') }} className="card" style={{ marginBottom: 16, cursor: 'pointer' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Total de peças lançadas</div>
@@ -527,40 +596,75 @@ export default function Indicadores({ usuario }) {
         </>
       )}
 
-      {/* ABA CARGA MÁQUINA */}
+      {/* ABA CARGA */}
       {abaIndicador === 'carga' && (
         <>
-          <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>
-            Cada barra representa um job. As linhas tracejadas marcam os limites de cada turno.
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 16 }}>
+            Baseado no nesting — toque em uma máquina para ver a carga por semana e mês.
           </div>
 
-          {/* Legenda turnos */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-            {['1', '2', '3'].map(t => (
-              <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 16, height: 2, borderTop: `2px dashed ${TURNOS[t].cor}` }} />
-                <span style={{ fontSize: 10, color: TURNOS[t].cor, fontWeight: 700 }}>
-                  {TURNOS[t].label} ({formatarTempo(TURNOS[t].min)})
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {Object.keys(porMaquina).length === 0 ? (
+          {Object.keys(nestingPorMaquina).length === 0 ? (
             <div className="empty">
               <div className="emoji">🖨️</div>
-              <h3>Sem jobs pendentes</h3>
-              <p>Nenhuma máquina em operação hoje</p>
+              <h3>Sem dados de nesting</h3>
+              <p>Importe o arquivo de nesting pelo monitor</p>
             </div>
           ) : (
-            Object.entries(porMaquina).map(([maquina, jobs]) => (
-              <GraficoCargaMaquina key={maquina} maquina={maquina} jobs={jobs} />
-            ))
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {Object.entries(nestingPorMaquina).sort((a, b) => {
+                const ta = b[1].reduce((s, t) => s + t.tempo, 0)
+                const tb = a[1].reduce((s, t) => s + t.tempo, 0)
+                return ta - tb
+              }).map(([maquina, tarefas]) => {
+                const totalMin = tarefas.reduce((s, t) => s + t.tempo, 0)
+                const diasNec = Math.ceil(totalMin / CAP_DIA)
+                const pctSemana = Math.round((Math.min(totalMin, CAP_DIA * 5) / (CAP_DIA * 5)) * 100)
+                const cor = corOcupacao(pctSemana)
+
+                return (
+                  <div key={maquina} onClick={() => setMaquinaSelecionada({ maquina, tarefas })}
+                    className="card" style={{ marginBottom: 0, cursor: 'pointer', padding: '14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: cor, flexShrink: 0 }} />
+                      <div style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, color: 'var(--yellow)', flex: 1 }}>
+                        {maquina.toUpperCase()}
+                      </div>
+                    </div>
+
+                    {/* Gauge mini */}
+                    <div style={{ textAlign: 'center', marginBottom: 8 }}>
+                      <div style={{ fontFamily: 'monospace', fontSize: 28, fontWeight: 700, color: cor }}>{pctSemana}%</div>
+                      <div style={{ fontSize: 10, color: 'var(--muted)' }}>da semana ocupado</div>
+                    </div>
+
+                    <div style={{ height: 6, background: 'var(--surface2)', borderRadius: 99, overflow: 'hidden', marginBottom: 8 }}>
+                      <div style={{ height: '100%', width: `${Math.min(pctSemana, 100)}%`, background: cor, borderRadius: 99 }} />
+                    </div>
+
+                    <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'center' }}>
+                      {formatarTempo(totalMin)} · ~{diasNec} dia(s)
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'center', marginTop: 2 }}>
+                      {tarefas.length} tarefa(s) · toque para ver ›
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           )}
         </>
       )}
 
-      {/* MODAIS */}
+      {/* Modal máquina */}
+      {maquinaSelecionada && (
+        <ModalMaquina
+          maquina={maquinaSelecionada.maquina}
+          tarefas={maquinaSelecionada.tarefas}
+          onClose={() => setMaquinaSelecionada(null)}
+        />
+      )}
+
+      {/* MODAIS GERAIS */}
       {modal === 'qualidade' && modalData && (
         <Modal titulo="Qualidade Laser" subtitulo="Apontamentos de hoje" onClose={() => setModal(null)}>
           <div style={{ textAlign: 'center', marginBottom: 20 }}>
@@ -604,21 +708,15 @@ export default function Indicadores({ usuario }) {
             const chapas = p.chapas_cortar || p.total_chapas || 0
             const feitas = p.chapas_feitas || 0
             const pct = chapas > 0 ? Math.round((feitas / chapas) * 100) : 0
-            const tempoTotalJob = p.cncs?.length > 0
-              ? p.cncs.reduce((s, c) => s + (c.tempoTotal || 0), 0)
-              : p.tempo_chapa ? chapas * p.tempo_chapa : null
+            const tempoTotalJob = p.cncs?.length > 0 ? p.cncs.reduce((s, c) => s + (c.tempoTotal || 0), 0) : p.tempo_chapa ? chapas * p.tempo_chapa : null
             const tempoRest = tempoTotalJob ? Math.round(tempoTotalJob * (1 - feitas / chapas)) : null
-            const prev = tempoRest ? previsaoTermino(tempoRest) : null
+            const prev = tempoRest ? (() => { const a = new Date(); a.setMinutes(a.getMinutes() + tempoRest); return a.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) })() : null
 
             return (
               <div key={p.id} style={{ marginBottom: 10, padding: '12px', background: 'var(--surface2)', borderRadius: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                   <div style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, flex: 1 }}>{p.job}</div>
-                  <span style={{
-                    fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
-                    background: p.finalizado ? 'rgba(0,255,136,.2)' : 'rgba(255,107,53,.2)',
-                    color: p.finalizado ? 'var(--green)' : '#ff6b35'
-                  }}>{p.finalizado ? '✅ Finalizado' : '⏳ Pendente'}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p.finalizado ? 'rgba(0,255,136,.2)' : 'rgba(255,107,53,.2)', color: p.finalizado ? 'var(--green)' : '#ff6b35' }}>{p.finalizado ? '✅' : '⏳'}</span>
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>🖨️ {p.maquina}</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>
@@ -628,7 +726,7 @@ export default function Indicadores({ usuario }) {
                 <div style={{ height: 8, background: 'var(--surface)', borderRadius: 99, overflow: 'hidden', marginBottom: 6 }}>
                   <div style={{ height: '100%', width: `${pct}%`, background: corP(pct), borderRadius: 99 }} />
                 </div>
-                {tempoTotalJob && <div style={{ fontSize: 11, color: 'var(--muted)' }}>⏱️ Total: {formatarTempo(tempoTotalJob)}{prev ? ` · 🏁 ${prev}` : ''}</div>}
+                {tempoTotalJob && <div style={{ fontSize: 11, color: 'var(--muted)' }}>⏱️ {formatarTempo(tempoTotalJob)}{prev ? ` · 🏁 ${prev}` : ''}</div>}
               </div>
             )
           })}
@@ -665,9 +763,7 @@ export default function Indicadores({ usuario }) {
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700 }}>{l.codigo}</div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                  👤 {l.usuario_nome || '—'} · T{l.turno} · {new Date(l.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                </div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>👤 {l.usuario_nome || '—'} · T{l.turno} · {new Date(l.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
               </div>
               <div style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, color: 'var(--green)' }}>+{l.quantidade} pç</div>
             </div>
