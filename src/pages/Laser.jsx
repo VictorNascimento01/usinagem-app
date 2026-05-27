@@ -374,11 +374,10 @@ function PlanejarCorte({ planta, usuario }) {
       setCncs(cncsDoNesting)
       setNestingEncontrado(true)
 
-      // Agrupa itens por CNC
       const itensPorProg = {}
       nestingRows.forEach(row => {
         if (!itensPorProg[row.programa]) itensPorProg[row.programa] = []
-        if (row.item) itensPorProg[row.programa].push({ item: row.item, ordem: row.ordem, qtd: row.qtd_nesting })
+        if (row.ordem) itensPorProg[row.programa].push({ ordem: row.ordem, qtd: row.qtd_nesting })
       })
       setItensPorCNCNesting(itensPorProg)
 
@@ -551,17 +550,16 @@ function PlanejarCorte({ planta, usuario }) {
                       </div>
                     </div>
                   </div>
-                  {/* Itens do nesting para este CNC */}
                   {itensDosCNC.length > 0 && (
                     <div style={{ marginTop: 10 }}>
                       <button onClick={() => setCncExpandido(cncExpandido === idx ? null : idx)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 11, padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
-                        {cncExpandido === idx ? '▼' : '▶'} {itensDosCNC.length} item(s) neste CNC
+                        {cncExpandido === idx ? '▼' : '▶'} {itensDosCNC.length} OP(s) neste CNC
                       </button>
                       {cncExpandido === idx && (
                         <div style={{ marginTop: 6, background: 'rgba(0,229,255,.04)', borderRadius: 6, padding: '6px 10px' }}>
                           {itensDosCNC.map((it, i) => (
                             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, padding: '4px 0', borderBottom: i < itensDosCNC.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                              <span style={{ fontFamily: 'monospace', color: 'var(--text)' }}>{it.item}</span>
+                              <span style={{ fontFamily: 'monospace', color: 'var(--muted)', fontSize: 10 }}>OP {it.ordem}</span>
                               <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{it.qtd} pç</span>
                             </div>
                           ))}
@@ -669,6 +667,21 @@ function ApontarProducao({ planta, usuario }) {
     }
   }
 
+  function apontarAutomatico(idx) {
+    const cnc = cncs[idx]
+    if (!cnc || !itensPorCNC[cnc.codigo]) return
+    const ordensDosCNC = itensPorCNC[cnc.codigo].map(i => String(i.ordem))
+    const novasQtds = { ...quantidades }
+    ordens.forEach(o => {
+      if (ordensDosCNC.includes(String(o.ordem))) {
+        novasQtds[o.ordem] = String(o.qtde_ordem)
+      }
+    })
+    setQuantidades(novasQtds)
+    setOrdensFiltradas(ordens.filter(o => ordensDosCNC.includes(String(o.ordem))))
+    showToast(`✅ ${ordensDosCNC.length} ordem(s) preenchidas automaticamente!`)
+  }
+
   function filtrarOrdens(val) {
     setBusca(val)
     if (!val) { setOrdensFiltradas(ordens); return }
@@ -734,7 +747,8 @@ function ApontarProducao({ planta, usuario }) {
                 padding: '12px',
                 background: cncAtivo === idx ? 'rgba(0,229,255,.08)' : 'var(--surface2)',
                 border: `2px solid ${cncAtivo === idx ? 'var(--accent)' : 'var(--border)'}`,
-                borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12
+                borderRadius: cncAtivo === idx && itensPorCNC[cnc.codigo] ? '10px 10px 0 0' : 10,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12
               }}>
                 <div style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: cncAtivo === idx ? 'var(--accent)' : 'var(--surface)', border: `2px solid ${cncAtivo === idx ? 'var(--accent)' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: cncAtivo === idx ? '#000' : 'var(--muted)' }}>{cnc.numero}</div>
                 <div style={{ flex: 1 }}>
@@ -742,21 +756,23 @@ function ApontarProducao({ planta, usuario }) {
                   <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
                     {cnc.chapas || 1} chapa{(cnc.chapas || 1) > 1 ? 's' : ''}
                     {cnc.tempoPorChapa > 0 ? ` · ${formatarTempo(cnc.tempoPorChapa)}/chapa` : ''}
-                    {itensPorCNC[cnc.codigo] ? ` · ${itensPorCNC[cnc.codigo].length} item(s)` : ''}
+                    {itensPorCNC[cnc.codigo] ? ` · ${itensPorCNC[cnc.codigo].length} OP(s)` : ''}
                   </div>
                 </div>
                 {cncAtivo === idx && <div style={{ background: 'var(--accent)', color: '#000', borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700 }}>▶ Ativo</div>}
               </div>
-              {/* Itens do CNC quando ativo */}
               {cncAtivo === idx && itensPorCNC[cnc.codigo] && (
-                <div style={{ background: 'rgba(0,229,255,.04)', border: '1px solid rgba(0,229,255,.15)', borderRadius: '0 0 8px 8px', padding: '8px 12px', marginTop: -4 }}>
-                  <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Itens deste CNC</div>
+                <div style={{ background: 'rgba(0,229,255,.04)', border: '2px solid var(--accent)', borderTop: 'none', borderRadius: '0 0 10px 10px', padding: '8px 12px' }}>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Ordens deste CNC</div>
                   {itensPorCNC[cnc.codigo].map((it, i) => (
                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, padding: '3px 0', borderBottom: i < itensPorCNC[cnc.codigo].length - 1 ? '1px solid var(--border)' : 'none' }}>
-                      <span style={{ fontFamily: 'monospace', color: 'var(--text)' }}>{it.item}</span>
+                      <span style={{ fontFamily: 'monospace', color: 'var(--muted)', fontSize: 10 }}>OP {it.ordem}</span>
                       <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{it.qtd_nesting} pç</span>
                     </div>
                   ))}
+                  <button onClick={() => apontarAutomatico(idx)} style={{ marginTop: 10, width: '100%', background: 'rgba(0,255,136,.15)', border: '1px solid rgba(0,255,136,.3)', borderRadius: 6, padding: '7px 10px', cursor: 'pointer', color: 'var(--green)', fontSize: 12, fontWeight: 700 }}>
+                    ✅ Apontar tudo como planejado
+                  </button>
                 </div>
               )}
             </div>
