@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Zap, X, AlertTriangle, Pencil, Check } from 'lucide-react'
+import { Zap, X, AlertTriangle, Pencil, Check, Plus, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import emailjs from '@emailjs/browser'
 
@@ -21,6 +21,31 @@ function nomeTurno(t) {
   if (t === '2') return '2º Turno'
   if (t === '3') return '3º Turno'
   return t || '—'
+}
+
+function nomeTurnoLongo(t) {
+  if (t === '1') return '1º Turno (07:00 - 16:48)'
+  if (t === '2') return '2º Turno (16:48 - 02:09)'
+  if (t === '3') return '3º Turno (02:09 - 07:00)'
+  return t
+}
+
+function detectarTurno() {
+  const agora = new Date()
+  const hora = agora.getHours()
+  const min = agora.getMinutes()
+  const diaSemana = agora.getDay()
+  const totalMin = hora * 60 + min
+  const t1inicio = 7 * 60
+  const t1fim = 16 * 60 + 48
+  const t3fimSexta = 10 * 60 + 9
+  const t3fimNormal = 7 * 60
+  if (totalMin >= t1inicio && totalMin < t1fim) return '1'
+  if (totalMin >= t1fim) return '2'
+  const ehSabado = diaSemana === 6
+  const fimT3 = ehSabado ? t3fimSexta : t3fimNormal
+  if (totalMin < fimT3) return '3'
+  return '1'
 }
 
 function formatarTempo(minutos) {
@@ -131,7 +156,7 @@ function ModalReporte({ item, onClose, usuario }) {
         if (sup.telefone) await enviarWhatsApp(sup.telefone, msgWpp)
       }
       await enviarWhatsApp(VICTOR_WHATSAPP, msgWpp)
-      showToast(`✅ Enviado para ${selectedResps.map(r => r.nome.split(' ')[0]).join(', ')}!`)
+      showToast(`✅ Enviado!`)
       setTimeout(() => onClose(), 1500)
     } catch (err) { console.error(err); showToast('Erro ao enviar!', 'var(--red)') }
     setEnviando(false)
@@ -159,7 +184,7 @@ function ModalReporte({ item, onClose, usuario }) {
           </div>
         )}
         <div className="field">
-          <label>Enviar para <span style={{ fontSize: 11, color: 'var(--muted)' }}>(selecione um ou mais)</span></label>
+          <label>Enviar para</label>
           <input className="input" value={buscaResp} onChange={e => onBuscaResp(e.target.value)} placeholder="Filtrar por nome..." />
         </div>
         <div style={{ background: 'var(--surface2)', borderRadius: 10, overflow: 'hidden', marginBottom: 14, border: '1px solid var(--border)' }}>
@@ -195,11 +220,19 @@ export default function Laser({ usuario }) {
   const [aba, setAba] = useState('sequencia')
   const [planta, setPlanta] = useState('todas')
 
+  const abas = [
+    { key: 'planejar', label: '📋 Planejar' },
+    { key: 'apontar', label: '✅ Apontar' },
+    { key: 'sequencia', label: '🔢 Sequência' },
+    { key: 'planejamentos', label: '🗂️ Planos' },
+    { key: 'relatorio', label: '📊 Relatório' },
+  ]
+
   return (
     <div>
       <div className="page-header">
         <div className="page-icon"><Zap size={22} color="#000" /></div>
-        <div><h1>LASER</h1><p>Planejamentos e sequência de corte</p></div>
+        <div><h1>LASER</h1><p>Corte, planejamento e sequência</p></div>
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
@@ -214,26 +247,567 @@ export default function Laser({ usuario }) {
         ))}
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        {[
-          { key: 'sequencia', label: '📋 Sequência' },
-          { key: 'planejamentos', label: '🗂️ Planejamentos' },
-          { key: 'relatorio', label: '📊 Relatório' },
-        ].map(({ key, label }) => (
+      <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+        {abas.slice(0, 3).map(({ key, label }) => (
           <button key={key} onClick={() => setAba(key)} style={{
             flex: 1, padding: '10px 4px', border: '1px solid',
             borderColor: aba === key ? 'var(--accent)' : 'var(--border)',
             background: aba === key ? 'rgba(0,229,255,.1)' : 'var(--surface)',
             color: aba === key ? 'var(--accent)' : 'var(--muted)',
-            borderRadius: 10, fontWeight: 700, fontSize: 11, cursor: 'pointer'
+            borderRadius: 10, fontWeight: 700, fontSize: 10, cursor: 'pointer'
+          }}>{label}</button>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+        {abas.slice(3).map(({ key, label }) => (
+          <button key={key} onClick={() => setAba(key)} style={{
+            flex: 1, padding: '10px 4px', border: '1px solid',
+            borderColor: aba === key ? 'var(--accent)' : 'var(--border)',
+            background: aba === key ? 'rgba(0,229,255,.1)' : 'var(--surface)',
+            color: aba === key ? 'var(--accent)' : 'var(--muted)',
+            borderRadius: 10, fontWeight: 700, fontSize: 10, cursor: 'pointer'
           }}>{label}</button>
         ))}
       </div>
 
+      {aba === 'planejar' && <PlanejarCorte planta={planta} usuario={usuario} />}
+      {aba === 'apontar' && <ApontarProducao planta={planta} usuario={usuario} />}
       {aba === 'sequencia' && <Sequencia planta={planta} usuario={usuario} />}
       {aba === 'planejamentos' && <Planejamentos planta={planta} usuario={usuario} />}
       {aba === 'relatorio' && <Relatorio planta={planta} usuario={usuario} />}
     </div>
+  )
+}
+
+function PlanejarCorte({ planta, usuario }) {
+  const isLiderOuMais = ['lider', 'supervisor', 'super'].includes(usuario?.nivel)
+  const [maquina, setMaquina] = useState('')
+  const [job, setJob] = useState('')
+  const [turno, setTurno] = useState(detectarTurno())
+  const [ordens, setOrdens] = useState([])
+  const [totalChapas, setTotalChapas] = useState('')
+  const [tipoCort, setTipoCort] = useState('total')
+  const [chapasParcial, setChapasParcial] = useState('')
+  const [cncs, setCncs] = useState([])
+  const [nestingEncontrado, setNestingEncontrado] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [salvando, setSalvando] = useState(false)
+  const [toast, setToast] = useState(null)
+  const [maquinasSalvas, setMaquinasSalvas] = useState([])
+  const [showMaquinas, setShowMaquinas] = useState(false)
+
+  useEffect(() => {
+    const salvas = JSON.parse(localStorage.getItem('maquinas_laser') || '[]')
+    setMaquinasSalvas(salvas)
+  }, [])
+
+  function showToast(msg, cor = 'var(--green)') {
+    setToast({ msg, cor })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  function salvarMaquina(nome) {
+    const salvas = JSON.parse(localStorage.getItem('maquinas_laser') || '[]')
+    if (!salvas.includes(nome)) {
+      salvas.push(nome)
+      localStorage.setItem('maquinas_laser', JSON.stringify(salvas))
+      setMaquinasSalvas(salvas)
+    }
+  }
+
+  function adicionarCNC() {
+    setCncs(prev => [...prev, { codigo: '', chapas: '', tempoH: '', tempoM: '' }])
+  }
+
+  function removerCNC(idx) {
+    setCncs(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  function atualizarCNC(idx, campo, valor) {
+    setCncs(prev => prev.map((c, i) => i === idx ? { ...c, [campo]: valor } : c))
+  }
+
+  function tempoTotalCNC(cnc) {
+    const chapas = parseInt(cnc.chapas) || 1
+    const minPorChapa = (parseInt(cnc.tempoH) || 0) * 60 + (parseInt(cnc.tempoM) || 0)
+    return chapas * minPorChapa
+  }
+
+  const tempoTotalJob = cncs.reduce((s, c) => s + tempoTotalCNC(c), 0)
+  const totalChapasCNCs = cncs.reduce((s, c) => s + (parseInt(c.chapas) || 0), 0)
+
+  async function buscarOrdens() {
+    if (!maquina || !job) { showToast('Informe a máquina e o job!', 'var(--red)'); return }
+    setLoading(true)
+    setNestingEncontrado(false)
+
+    const { data } = await supabase
+      .from('ordens')
+      .select('ordem, item_ccs, cliente, qtde_ordem, saldo, estab')
+      .ilike('tarefa', `%${job}%`)
+      .order('item_ccs')
+
+    if (usuario?.estab && usuario.estab !== 'todas' && data?.length > 0) {
+      const estabOrdem = data[0].estab
+      if (estabOrdem !== usuario.estab) {
+        showToast(`❌ Este job é de ${estabOrdem === '100' ? 'Limeira' : 'Palmeira'}!`, 'var(--red)')
+        setLoading(false)
+        return
+      }
+    }
+
+    const { data: nestingRows } = await supabase
+      .from('nesting')
+      .select('programa, qtd_chapa, tempo_corte_total')
+      .ilike('tarefa', `%${job}%`)
+      .order('programa')
+
+    if (nestingRows && nestingRows.length > 0) {
+      const programasVistos = {}
+      nestingRows.forEach(row => {
+        if (!programasVistos[row.programa]) programasVistos[row.programa] = row
+      })
+      const cncsDoNesting = Object.values(programasVistos).map(row => {
+        const tempoTotalMin = Math.round((parseFloat(String(row.tempo_corte_total).replace(',', '.')) || 0) * 60)
+        const chapas = parseInt(row.qtd_chapa) || 1
+        const tempoPorChapa = chapas > 0 ? Math.round(tempoTotalMin / chapas) : 0
+        return {
+          codigo: String(row.programa),
+          chapas: String(chapas),
+          tempoH: Math.floor(tempoPorChapa / 60) > 0 ? String(Math.floor(tempoPorChapa / 60)) : '',
+          tempoM: tempoPorChapa % 60 > 0 ? String(tempoPorChapa % 60) : '',
+        }
+      })
+      setCncs(cncsDoNesting)
+      setNestingEncontrado(true)
+      const totalChapasNesting = Object.values(programasVistos).reduce((s, r) => s + (parseInt(r.qtd_chapa) || 0), 0)
+      setTotalChapas(String(totalChapasNesting))
+      showToast(`✅ ${cncsDoNesting.length} CNC(s) importados do nesting!`)
+    } else {
+      setCncs([])
+      setNestingEncontrado(false)
+    }
+
+    setOrdens(data || [])
+    salvarMaquina(maquina)
+    setLoading(false)
+    if (!data?.length) showToast('Nenhuma ordem encontrada!', 'var(--red)')
+  }
+
+  async function confirmar() {
+    if (!totalChapas) { showToast('Informe o total de chapas!', 'var(--red)'); return }
+    if (tipoCort === 'parcial' && !chapasParcial) { showToast('Informe quantas chapas vai cortar!', 'var(--red)'); return }
+    if (ordens.length === 0) { showToast('Busque as ordens primeiro!', 'var(--red)'); return }
+
+    setSalvando(true)
+    const estab = ordens[0]?.estab || ''
+    const chapasCortar = tipoCort === 'parcial' ? parseInt(chapasParcial) : parseInt(totalChapas)
+    const cncsFormatados = cncs.map((c, i) => ({
+      numero: i + 1, codigo: c.codigo,
+      chapas: parseInt(c.chapas) || 1,
+      tempoPorChapa: (parseInt(c.tempoH) || 0) * 60 + (parseInt(c.tempoM) || 0),
+      tempoTotal: tempoTotalCNC(c)
+    }))
+
+    const { error } = await supabase.from('laser_planejamento').insert({
+      job, maquina, turno,
+      total_chapas: parseInt(totalChapas),
+      tipo: tipoCort,
+      chapas_cortar: chapasCortar,
+      tempo_chapa: cncsFormatados.length > 0 && chapasCortar > 0 ? Math.round(tempoTotalJob / chapasCortar) : null,
+      cncs: cncsFormatados,
+      cnc_ativo: 0, chapas_feitas: 0, finalizado: false,
+      estab, usuario_nome: usuario?.nome, usuario_email: usuario?.email
+    })
+
+    setSalvando(false)
+    if (error) { showToast('Erro ao salvar!', 'var(--red)') }
+    else {
+      showToast('✅ Planejamento salvo!')
+      setJob(''); setTotalChapas(''); setChapasParcial('')
+      setTipoCort('total'); setOrdens([])
+      setCncs([]); setNestingEncontrado(false)
+      setTurno(detectarTurno())
+    }
+  }
+
+  const maquinasFiltradas = maquinasSalvas.filter(m => m.toLowerCase().includes(maquina.toLowerCase()))
+
+  return (
+    <>
+      <div className="card">
+        <div className="card-title">📋 Planejar corte</div>
+        <div className="field" style={{ position: 'relative' }}>
+          <label>Máquina</label>
+          <input className="input" value={maquina}
+            onChange={e => { setMaquina(e.target.value); setShowMaquinas(true) }}
+            onFocus={() => setShowMaquinas(true)}
+            onBlur={() => setTimeout(() => setShowMaquinas(false), 200)}
+            placeholder="Ex: ML42, ML35..." autoComplete="off" />
+          {showMaquinas && maquinasFiltradas.length > 0 && (
+            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--surface2)', border: '1px solid var(--accent)', borderTop: 'none', borderRadius: '0 0 10px 10px', zIndex: 100 }}>
+              {maquinasFiltradas.map((m, i) => (
+                <div key={i} onClick={() => { setMaquina(m); setShowMaquinas(false) }} style={{ padding: '10px 14px', cursor: 'pointer', fontFamily: 'monospace', fontSize: 13, borderBottom: '1px solid var(--border)' }}>{m}</div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="field">
+          <label>Job / Tarefa</label>
+          <input className="input" value={job}
+            onChange={e => setJob(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && buscarOrdens()}
+            placeholder="Ex: J092362" />
+        </div>
+        <div className="field">
+          <label>Turno</label>
+          {isLiderOuMais ? (
+            <select className="input" value={turno} onChange={e => setTurno(e.target.value)}>
+              <option value="1">1º Turno (07:00 - 16:48)</option>
+              <option value="2">2º Turno (16:48 - 02:09)</option>
+              <option value="3">3º Turno (02:09 - 07:00)</option>
+            </select>
+          ) : (
+            <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px', fontSize: 13, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 16 }}>🕐</span>
+              <span style={{ fontWeight: 700 }}>{nomeTurnoLongo(turno)}</span>
+              <span style={{ fontSize: 11, color: 'var(--green)', marginLeft: 'auto' }}>automático</span>
+            </div>
+          )}
+        </div>
+        <button className="btn-primary" onClick={buscarOrdens} disabled={loading} style={{ background: 'var(--yellow)', color: '#000', marginBottom: 0 }}>
+          {loading ? 'Buscando...' : '🔍 Buscar ordens'}
+        </button>
+      </div>
+
+      {ordens.length > 0 && (
+        <div className="card">
+          <div className="card-title">Ordens do job {job}</div>
+          <div className="field">
+            <label>Total de chapas do job</label>
+            <input className="input" type="number" value={totalChapas} onChange={e => setTotalChapas(e.target.value)} placeholder="Ex: 10" min="1" />
+          </div>
+          <div className="field">
+            <label>Vai cortar</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {['total', 'parcial'].map(opt => (
+                <button key={opt} onClick={() => setTipoCort(opt)} style={{
+                  flex: 1, padding: '10px', border: '1px solid',
+                  borderColor: tipoCort === opt ? 'var(--yellow)' : 'var(--border)',
+                  background: tipoCort === opt ? 'rgba(255,214,10,.1)' : 'var(--surface2)',
+                  color: tipoCort === opt ? 'var(--yellow)' : 'var(--muted)',
+                  borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer'
+                }}>{opt === 'total' ? '✅ Total' : '⚡ Parcial'}</button>
+              ))}
+            </div>
+          </div>
+          {tipoCort === 'parcial' && (
+            <div className="field">
+              <label>Quantas chapas vai cortar agora?</label>
+              <input className="input" type="number" value={chapasParcial} onChange={e => setChapasParcial(e.target.value)} placeholder={`de ${totalChapas || '?'} chapas`} min="1" />
+            </div>
+          )}
+          <div className="field">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <label style={{ marginBottom: 0 }}>
+                CNCs do nesting
+                {nestingEncontrado && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, background: 'rgba(0,255,136,.2)', color: 'var(--green)', padding: '2px 7px', borderRadius: 10 }}>✅ Auto</span>}
+              </label>
+              <button onClick={adicionarCNC} style={{ background: 'rgba(0,229,255,.1)', border: '1px solid rgba(0,229,255,.3)', borderRadius: 8, padding: '5px 10px', cursor: 'pointer', color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700 }}>
+                <Plus size={13} /> Adicionar CNC
+              </button>
+            </div>
+            {nestingEncontrado && (
+              <div style={{ background: 'rgba(0,255,136,.08)', border: '1px solid rgba(0,255,136,.3)', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 12, color: 'var(--green)' }}>
+                🎉 CNCs importados automaticamente do nesting!
+              </div>
+            )}
+            {cncs.length === 0 && (
+              <div style={{ background: 'var(--surface2)', borderRadius: 10, padding: '14px', textAlign: 'center', fontSize: 12, color: 'var(--muted)', border: '1px dashed var(--border)' }}>
+                Toque em "Adicionar CNC" para informar os programas do nesting
+              </div>
+            )}
+            {cncs.map((cnc, idx) => {
+              const tempoTotal = tempoTotalCNC(cnc)
+              return (
+                <div key={idx} style={{ background: 'var(--surface2)', borderRadius: 10, padding: '12px', marginBottom: 8, border: nestingEncontrado ? '1px solid rgba(0,255,136,.2)' : '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <div style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: '#000' }}>{idx + 1}</div>
+                    <div style={{ flex: 1, fontWeight: 700, fontSize: 13 }}>CNC {idx + 1}</div>
+                    {tempoTotal > 0 && <div style={{ background: 'rgba(0,229,255,.1)', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700, color: 'var(--accent)' }}>⏱️ {formatarTempo(tempoTotal)}</div>}
+                    <button onClick={() => removerCNC(idx)} style={{ background: 'rgba(255,61,90,.1)', border: '1px solid rgba(255,61,90,.3)', borderRadius: 6, padding: '4px 6px', cursor: 'pointer', color: 'var(--red)' }}>
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                  <div className="field" style={{ marginBottom: 8 }}>
+                    <label style={{ fontSize: 11 }}>Código do programa</label>
+                    <input className="input" value={cnc.codigo} onChange={e => atualizarCNC(idx, 'codigo', e.target.value)} placeholder="Ex: 248382..." />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 8 }}>
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <label style={{ fontSize: 11 }}>Nº chapas</label>
+                      <input className="input" type="number" value={cnc.chapas} onChange={e => atualizarCNC(idx, 'chapas', e.target.value)} placeholder="1" min="1" />
+                    </div>
+                    <div className="field" style={{ marginBottom: 0 }}>
+                      <label style={{ fontSize: 11 }}>Tempo por chapa</label>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <div style={{ flex: 1 }}>
+                          <input className="input" type="number" value={cnc.tempoH} onChange={e => atualizarCNC(idx, 'tempoH', e.target.value)} placeholder="0" min="0" />
+                          <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'center', marginTop: 2 }}>h</div>
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <input className="input" type="number" value={cnc.tempoM} onChange={e => atualizarCNC(idx, 'tempoM', e.target.value)} placeholder="0" min="0" max="59" />
+                          <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'center', marginTop: 2 }}>min</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+            {cncs.length > 0 && tempoTotalJob > 0 && (
+              <div style={{ background: 'rgba(255,214,10,.08)', border: '1px solid rgba(255,214,10,.3)', borderRadius: 10, padding: '12px 16px', marginTop: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ fontSize: 24 }}>⏱️</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 2 }}>Tempo total ({cncs.length} CNC{cncs.length > 1 ? 's' : ''} · {totalChapasCNCs} chapas)</div>
+                  <div style={{ fontFamily: 'monospace', fontSize: 22, fontWeight: 700, color: 'var(--yellow)' }}>{formatarTempo(tempoTotalJob)}</div>
+                </div>
+              </div>
+            )}
+          </div>
+          <div style={{ height: 1, background: 'var(--border)', margin: '8px 0 16px' }} />
+          {ordens.map((o, i) => (
+            <div key={i} style={{ padding: '10px 0', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700 }}>{o.item_ccs}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>OP {o.ordem} · {o.cliente || '—'} · {o.qtde_ordem} pç</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ background: o.estab === '100' ? 'rgba(0,229,255,.15)' : 'rgba(0,255,136,.15)', color: o.estab === '100' ? 'var(--accent)' : 'var(--green)', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4 }}>
+                  {o.estab === '100' ? 'Limeira' : 'Palmeira'}
+                </span>
+                <div style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--yellow)', fontWeight: 700, marginTop: 4 }}>{o.saldo} pç</div>
+              </div>
+            </div>
+          ))}
+          <button className="btn-primary" onClick={confirmar} disabled={salvando} style={{ background: 'var(--yellow)', color: '#000', marginTop: 16 }}>
+            {salvando ? 'Salvando...' : '✅ Confirmar planejamento'}
+          </button>
+        </div>
+      )}
+      {toast && <div className="toast" style={{ background: toast.cor }}>{toast.msg}</div>}
+    </>
+  )
+}
+
+function ApontarProducao({ planta, usuario }) {
+  const [job, setJob] = useState('')
+  const [busca, setBusca] = useState('')
+  const [ordens, setOrdens] = useState([])
+  const [ordensFiltradas, setOrdensFiltradas] = useState([])
+  const [quantidades, setQuantidades] = useState({})
+  const [loading, setLoading] = useState(false)
+  const [salvando, setSalvando] = useState(false)
+  const [toast, setToast] = useState(null)
+  const [planejamento, setPlanejamento] = useState(null)
+  const [cncAtivo, setCncAtivo] = useState(0)
+  const [itensPorCNC, setItensPorCNC] = useState({})
+
+  function showToast(msg, cor = 'var(--green)') {
+    setToast({ msg, cor })
+    setTimeout(() => setToast(null), 2500)
+  }
+
+  async function buscarOrdens() {
+    if (!job) { showToast('Informe o job!', 'var(--red)'); return }
+    setLoading(true)
+
+    const { data: ords } = await supabase
+      .from('ordens')
+      .select('ordem, item_ccs, cliente, qtde_ordem, saldo, estab')
+      .ilike('tarefa', `%${job}%`)
+      .order('item_ccs')
+
+    if (usuario?.estab && usuario.estab !== 'todas' && ords?.length > 0) {
+      const estabOrdem = ords[0].estab
+      if (estabOrdem !== usuario.estab) {
+        showToast(`❌ Este job é de ${estabOrdem === '100' ? 'Limeira' : 'Palmeira'}!`, 'var(--red)')
+        setLoading(false)
+        return
+      }
+    }
+
+    const { data: plan } = await supabase
+      .from('laser_planejamento')
+      .select('*')
+      .ilike('job', `%${job}%`)
+      .order('criado_em', { ascending: false })
+      .limit(1)
+
+    const { data: nestingRows } = await supabase
+      .from('nesting')
+      .select('programa, ordem, item, qtd_nesting')
+      .ilike('tarefa', `%${job}%`)
+      .order('programa')
+
+    const itensPorCNCTemp = {}
+    nestingRows?.forEach(row => {
+      if (!itensPorCNCTemp[row.programa]) itensPorCNCTemp[row.programa] = []
+      itensPorCNCTemp[row.programa].push(row)
+    })
+
+    setOrdens(ords || [])
+    setOrdensFiltradas(ords || [])
+    setPlanejamento(plan?.[0] || null)
+    setCncAtivo(plan?.[0]?.cnc_ativo || 0)
+    setItensPorCNC(itensPorCNCTemp)
+
+    const qtds = {}
+    ords?.forEach(o => { qtds[o.ordem] = '' })
+    setQuantidades(qtds)
+    setLoading(false)
+    setBusca('')
+    if (!ords?.length) showToast('Nenhuma ordem encontrada!', 'var(--red)')
+  }
+
+  async function selecionarCNC(idx) {
+    setCncAtivo(idx)
+    if (planejamento) {
+      await supabase.from('laser_planejamento').update({ cnc_ativo: idx }).eq('id', planejamento.id)
+    }
+    const cnc = cncs[idx]
+    if (cnc && itensPorCNC[cnc.codigo]) {
+      const ordensDosCNC = itensPorCNC[cnc.codigo].map(i => String(i.ordem))
+      setOrdensFiltradas(ordens.filter(o => ordensDosCNC.includes(String(o.ordem))))
+    } else {
+      setOrdensFiltradas(ordens)
+    }
+  }
+
+  function filtrarOrdens(val) {
+    setBusca(val)
+    if (!val) { setOrdensFiltradas(ordens); return }
+    const q = val.toLowerCase()
+    setOrdensFiltradas(ordens.filter(o =>
+      o.item_ccs.toLowerCase().includes(q) ||
+      o.ordem.toLowerCase().includes(q) ||
+      (o.cliente || '').toLowerCase().includes(q)
+    ))
+  }
+
+  async function confirmar() {
+    const temQtd = Object.values(quantidades).some(q => q !== '' && parseInt(q) >= 0)
+    if (!temQtd) { showToast('Preencha pelo menos uma quantidade!', 'var(--red)'); return }
+    setSalvando(true)
+    for (const ordem of ordens) {
+      const qtd = quantidades[ordem.ordem]
+      if (qtd === '') continue
+      await supabase.from('laser_apontamento').insert({
+        job, ordem: ordem.ordem, item_ccs: ordem.item_ccs,
+        qtd_planejada: ordem.qtde_ordem, qtd_real: parseInt(qtd),
+        maquina: planejamento?.maquina || '',
+        usuario_nome: usuario?.nome, usuario_email: usuario?.email
+      })
+    }
+    if (planejamento && planejamento.tipo === 'total') {
+      await supabase.from('laser_planejamento').update({ finalizado: true }).eq('id', planejamento.id)
+    }
+    setSalvando(false)
+    showToast('✅ Apontamentos salvos!')
+    setOrdens([]); setOrdensFiltradas([]); setJob('')
+    setQuantidades({}); setPlanejamento(null); setBusca('')
+    setCncAtivo(0); setItensPorCNC({})
+  }
+
+  const cncs = planejamento?.cncs || []
+  const cncAtivoObj = cncs[cncAtivo] || null
+
+  return (
+    <>
+      <div className="card">
+        <div className="card-title">✅ Apontar produção laser</div>
+        <div className="field">
+          <label>Job / Tarefa</label>
+          <input className="input" value={job}
+            onChange={e => setJob(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && buscarOrdens()}
+            placeholder="Ex: J092362" />
+        </div>
+        <button className="btn-primary" onClick={buscarOrdens} disabled={loading} style={{ marginBottom: 0 }}>
+          {loading ? 'Buscando...' : '🔍 Buscar ordens'}
+        </button>
+      </div>
+
+      {planejamento && (
+        <div style={{ background: 'rgba(255,214,10,.08)', border: '1px solid rgba(255,214,10,.3)', borderRadius: 10, padding: '10px 14px', marginBottom: 12 }}>
+          <div style={{ fontWeight: 700, color: 'var(--yellow)', marginBottom: 4 }}>📋 Planejamento encontrado</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+            Máquina: {planejamento.maquina} · {planejamento.total_chapas} chapas
+            {planejamento.turno ? ` · ${nomeTurnoLongo(planejamento.turno)}` : ''}
+            {planejamento.tipo === 'parcial' ? ` · Parcial: ${planejamento.chapas_cortar} chapas` : ' · Total'}
+          </div>
+        </div>
+      )}
+
+      {cncs.length > 0 && (
+        <div className="card" style={{ marginBottom: 12 }}>
+          <div className="card-title">🎯 Qual CNC está cortando agora?</div>
+          {cncs.map((cnc, idx) => (
+            <div key={idx} onClick={() => selecionarCNC(idx)} style={{
+              padding: '12px', marginBottom: 8,
+              background: cncAtivo === idx ? 'rgba(0,229,255,.08)' : 'var(--surface2)',
+              border: `2px solid ${cncAtivo === idx ? 'var(--accent)' : 'var(--border)'}`,
+              borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12
+            }}>
+              <div style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: cncAtivo === idx ? 'var(--accent)' : 'var(--surface)', border: `2px solid ${cncAtivo === idx ? 'var(--accent)' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: cncAtivo === idx ? '#000' : 'var(--muted)' }}>{cnc.numero}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: cncAtivo === idx ? 'var(--accent)' : 'var(--text)' }}>
+                  CNC {cnc.numero}{cnc.codigo ? ` — ${cnc.codigo}` : ''}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                  {cnc.chapas || 1} chapa{(cnc.chapas || 1) > 1 ? 's' : ''}
+                  {cnc.tempoPorChapa > 0 ? ` · ${formatarTempo(cnc.tempoPorChapa)}/chapa` : ''}
+                </div>
+              </div>
+              {cncAtivo === idx && <div style={{ background: 'var(--accent)', color: '#000', borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700 }}>▶ Ativo</div>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {ordens.length > 0 && (
+        <>
+          <div className="field">
+            <input className="input" value={busca} onChange={e => filtrarOrdens(e.target.value)} placeholder="Filtrar por item, ordem ou cliente..." />
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
+            {ordensFiltradas.length} de {ordens.length} ordem(s)
+          </div>
+          {ordensFiltradas.map(o => (
+            <div key={o.ordem} className="card" style={{ marginBottom: 10, padding: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                <div style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700 }}>{o.item_ccs}</div>
+                <span style={{ background: o.estab === '100' ? 'rgba(0,229,255,.15)' : 'rgba(0,255,136,.15)', color: o.estab === '100' ? 'var(--accent)' : 'var(--green)', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4 }}>
+                  {o.estab === '100' ? 'Limeira' : 'Palmeira'}
+                </span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12 }}>OP {o.ordem} · {o.cliente || '—'} · Planejado: {o.qtde_ordem} pç</div>
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label>Quantidade real</label>
+                <input className="input" type="number"
+                  value={quantidades[o.ordem] || ''}
+                  onChange={e => setQuantidades(p => ({ ...p, [o.ordem]: e.target.value }))}
+                  placeholder={`Planejado: ${o.qtde_ordem} pç`} min="0" />
+              </div>
+            </div>
+          ))}
+          <button className="btn-primary" onClick={confirmar} disabled={salvando}>
+            {salvando ? 'Salvando...' : '✅ Confirmar apontamentos'}
+          </button>
+        </>
+      )}
+      {toast && <div className="toast" style={{ background: toast.cor }}>{toast.msg}</div>}
+    </>
   )
 }
 
@@ -296,6 +870,29 @@ function Sequencia({ planta, usuario }) {
     return { decorrido, previsto, perf: Math.min(perf, 999) }
   }
 
+  function calcularAlerta(job) {
+    if (!job.iniciado_em || !job.tempo_chapa) return null
+    const inicio = new Date(job.iniciado_em)
+    const decorridoMin = Math.floor((agora - inicio) / 60000)
+    const chapasTotal = job.chapas_cortar || job.total_chapas || 0
+    const chapasFeitas = job.chapas_feitas || 0
+    const chapasRestantes = chapasTotal - chapasFeitas
+    const previsto = chapasTotal * job.tempo_chapa
+    const tempoRestantePrevisto = chapasRestantes * job.tempo_chapa
+    if (decorridoMin > previsto && chapasRestantes > 0) {
+      return { nivel: 'critico', msg: `🔴 Atrasado! Tempo previsto já passou — ainda faltam ${chapasRestantes} chapa(s)` }
+    }
+    const pctTempoUsado = previsto > 0 ? decorridoMin / previsto : 0
+    const pctChapasFeitas = chapasTotal > 0 ? chapasFeitas / chapasTotal : 0
+    if (pctTempoUsado > 0.75 && pctChapasFeitas < 0.5) {
+      return { nivel: 'atencao', msg: `⚠️ Atenção! Mais de 75% do tempo usado e menos de 50% das chapas cortadas` }
+    }
+    if (tempoRestantePrevisto <= 15 && chapasRestantes > 0) {
+      return { nivel: 'atencao', msg: `⚠️ Menos de 15min para terminar — faltam ${chapasRestantes} chapa(s)` }
+    }
+    return null
+  }
+
   const porMaquina = {}
   dados.forEach(p => {
     const maq = p.maquina || '—'
@@ -319,7 +916,7 @@ function Sequencia({ planta, usuario }) {
     <div className="empty">
       <div className="emoji">⚡</div>
       <h3>Nenhum job pendente</h3>
-      <p>Lance um corte no formulário Laser</p>
+      <p>Lance um corte na aba Planejar</p>
     </div>
   )
 
@@ -345,10 +942,24 @@ function Sequencia({ planta, usuario }) {
             const previsao = tempoRestante ? previsaoTermino(tempoRestante) : null
             const cronometro = formatarCronometro(job)
             const perf = calcularPerformance(job)
+            const alerta = calcularAlerta(job)
             const iniciado = !!job.iniciado_em
 
             return (
               <div key={job.id} style={{ padding: '14px 16px', borderTop: '1px solid var(--border)' }}>
+                {/* Alerta */}
+                {alerta && (
+                  <div style={{
+                    background: alerta.nivel === 'critico' ? 'rgba(255,61,90,.15)' : 'rgba(255,214,10,.12)',
+                    border: `1px solid ${alerta.nivel === 'critico' ? 'rgba(255,61,90,.5)' : 'rgba(255,214,10,.5)'}`,
+                    borderRadius: 8, padding: '8px 12px', marginBottom: 10,
+                    fontSize: 12, fontWeight: 700,
+                    color: alerta.nivel === 'critico' ? 'var(--red)' : 'var(--yellow)'
+                  }}>
+                    {alerta.msg}
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                   <div style={{
                     width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
@@ -380,26 +991,16 @@ function Sequencia({ planta, usuario }) {
                       👤 {job.usuario_nome} · {formatarHora(job.criado_em)}
                     </div>
 
-                    {/* Cronômetro */}
                     {iniciado && cronometro && (
-                      <div style={{
-                        background: 'rgba(0,229,255,.08)', border: '1px solid rgba(0,229,255,.2)',
-                        borderRadius: 8, padding: '8px 12px', marginBottom: 8,
-                        display: 'flex', alignItems: 'center', gap: 10
-                      }}>
+                      <div style={{ background: 'rgba(0,229,255,.08)', border: '1px solid rgba(0,229,255,.2)', borderRadius: 8, padding: '8px 12px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 2 }}>⏱️ Em corte</div>
-                          <div style={{ fontFamily: 'monospace', fontSize: 20, fontWeight: 700, color: 'var(--accent)', letterSpacing: 2 }}>
-                            {cronometro}
-                          </div>
+                          <div style={{ fontFamily: 'monospace', fontSize: 20, fontWeight: 700, color: 'var(--accent)', letterSpacing: 2 }}>{cronometro}</div>
                         </div>
                         {perf && (
                           <div style={{ textAlign: 'right' }}>
                             <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 2 }}>Performance</div>
-                            <div style={{
-                              fontFamily: 'monospace', fontSize: 18, fontWeight: 700,
-                              color: perf.perf >= 100 ? 'var(--green)' : perf.perf >= 80 ? 'var(--yellow)' : 'var(--red)'
-                            }}>
+                            <div style={{ fontFamily: 'monospace', fontSize: 18, fontWeight: 700, color: perf.perf >= 100 ? 'var(--green)' : perf.perf >= 80 ? 'var(--yellow)' : 'var(--red)' }}>
                               {perf.perf >= 110 ? '🚀' : perf.perf >= 100 ? '🟢' : perf.perf >= 80 ? '🟡' : '🔴'} {perf.perf}%
                             </div>
                             <div style={{ fontSize: 10, color: 'var(--muted)' }}>previsto {formatarTempo(perf.previsto)}</div>
@@ -420,25 +1021,12 @@ function Sequencia({ planta, usuario }) {
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {!iniciado && (
-                      <button onClick={() => iniciar(job)} style={{
-                        background: 'rgba(0,229,255,.15)', border: '1px solid rgba(0,229,255,.4)',
-                        borderRadius: 8, padding: '6px 8px', cursor: 'pointer',
-                        color: 'var(--accent)', fontSize: 11, fontWeight: 700
-                      }}>▶ Iniciar</button>
+                      <button onClick={() => iniciar(job)} style={{ background: 'rgba(0,229,255,.15)', border: '1px solid rgba(0,229,255,.4)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: 'var(--accent)', fontSize: 11, fontWeight: 700 }}>▶ Iniciar</button>
                     )}
-                    <button onClick={() => marcarChapa(job)} style={{
-                      background: 'rgba(0,255,136,.15)', border: '1px solid rgba(0,255,136,.3)',
-                      borderRadius: 8, padding: '6px 8px', cursor: 'pointer',
-                      color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 4,
-                      fontSize: 11, fontWeight: 700
-                    }}>
+                    <button onClick={() => marcarChapa(job)} style={{ background: 'rgba(0,255,136,.15)', border: '1px solid rgba(0,255,136,.3)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700 }}>
                       <Check size={13} /> +1
                     </button>
-                    <button onClick={() => setReportando({ job: job.job, maquina: job.maquina })} style={{
-                      background: 'rgba(255,107,53,.15)', border: '1px solid rgba(255,107,53,.4)',
-                      borderRadius: 8, padding: '6px 8px', cursor: 'pointer',
-                      color: '#ff6b35', display: 'flex', alignItems: 'center'
-                    }}>
+                    <button onClick={() => setReportando({ job: job.job, maquina: job.maquina })} style={{ background: 'rgba(255,107,53,.15)', border: '1px solid rgba(255,107,53,.4)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: '#ff6b35', display: 'flex', alignItems: 'center' }}>
                       <AlertTriangle size={14} />
                     </button>
                   </div>
@@ -448,7 +1036,6 @@ function Sequencia({ planta, usuario }) {
           })}
         </div>
       ))}
-
       {reportando && <ModalReporte item={reportando} onClose={() => setReportando(null)} usuario={usuario} />}
     </div>
   )
@@ -515,10 +1102,8 @@ function Planejamentos({ planta, usuario }) {
       total_chapas: parseInt(editando.total_chapas),
       chapas_cortar: parseInt(editando.chapas_cortar),
       chapas_feitas: parseInt(editando.chapas_feitas) || 0,
-      turno: editando.turno,
-      maquina: editando.maquina,
-      tempo_chapa: tempoUnitMin || null,
-      finalizado: editando.finalizado
+      turno: editando.turno, maquina: editando.maquina,
+      tempo_chapa: tempoUnitMin || null, finalizado: editando.finalizado
     }).eq('id', editando.id)
     setSalvandoEdit(false)
     setEditando(null)
@@ -536,7 +1121,7 @@ function Planejamentos({ planta, usuario }) {
     <div className="empty">
       <div className="emoji">📋</div>
       <h3>Nenhum planejamento</h3>
-      <p>Lance um corte no formulário Laser</p>
+      <p>Lance um corte na aba Planejar</p>
     </div>
   )
 
@@ -547,9 +1132,7 @@ function Planejamentos({ planta, usuario }) {
     <>
       {pendentes.length > 0 && (
         <>
-          <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
-            ⏳ Pendentes ({pendentes.length})
-          </div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>⏳ Pendentes ({pendentes.length})</div>
           {pendentes.map(p => (
             <div key={p.id} className="card" style={{ marginBottom: 10, border: '1px solid rgba(255,107,53,.3)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -557,36 +1140,20 @@ function Planejamentos({ planta, usuario }) {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                     <div style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700 }}>{p.job}</div>
                     <span style={{ background: 'rgba(255,107,53,.2)', color: '#ff6b35', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4 }}>⏳ Pendente</span>
-                    {p.estab && (
-                      <span style={{
-                        background: p.estab === '100' ? 'rgba(0,229,255,.15)' : 'rgba(0,255,136,.15)',
-                        color: p.estab === '100' ? 'var(--accent)' : 'var(--green)',
-                        fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4
-                      }}>{p.estab === '100' ? 'Limeira' : 'Palmeira'}</span>
-                    )}
+                    {p.estab && <span style={{ background: p.estab === '100' ? 'rgba(0,229,255,.15)' : 'rgba(0,255,136,.15)', color: p.estab === '100' ? 'var(--accent)' : 'var(--green)', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4 }}>{p.estab === '100' ? 'Limeira' : 'Palmeira'}</span>}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--muted)' }}>🖨️ {p.maquina} · {nomeTurno(p.turno)}</div>
-                  {p.tempo_chapa && (
-                    <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 4 }}>
-                      ⏱️ {formatarTempo((p.chapas_cortar || p.total_chapas) * p.tempo_chapa)} estimado · {formatarTempo(p.tempo_chapa)}/chapa
-                    </div>
-                  )}
+                  {p.tempo_chapa && <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 4 }}>⏱️ {formatarTempo((p.chapas_cortar || p.total_chapas) * p.tempo_chapa)} estimado</div>}
                   <BarraProgresso feitas={p.chapas_feitas || 0} total={p.chapas_cortar || p.total_chapas} cor="#ff6b35" />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {isLiderOuMais && (
                     <>
-                      <button onClick={() => abrirEdicao(p)} style={{ background: 'rgba(0,229,255,.1)', border: '1px solid rgba(0,229,255,.3)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: 'var(--accent)' }}>
-                        <Pencil size={14} />
-                      </button>
-                      <button onClick={() => excluir(p.id)} style={{ background: 'rgba(255,61,90,.1)', border: '1px solid rgba(255,61,90,.3)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: 'var(--red)' }}>
-                        🗑️
-                      </button>
+                      <button onClick={() => abrirEdicao(p)} style={{ background: 'rgba(0,229,255,.1)', border: '1px solid rgba(0,229,255,.3)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: 'var(--accent)' }}><Pencil size={14} /></button>
+                      <button onClick={() => excluir(p.id)} style={{ background: 'rgba(255,61,90,.1)', border: '1px solid rgba(255,61,90,.3)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: 'var(--red)' }}>🗑️</button>
                     </>
                   )}
-                  <button onClick={() => setReportando({ job: p.job, maquina: p.maquina })} style={{ background: 'rgba(255,107,53,.15)', border: '1px solid rgba(255,107,53,.4)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: '#ff6b35' }}>
-                    <AlertTriangle size={14} />
-                  </button>
+                  <button onClick={() => setReportando({ job: p.job, maquina: p.maquina })} style={{ background: 'rgba(255,107,53,.15)', border: '1px solid rgba(255,107,53,.4)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: '#ff6b35' }}><AlertTriangle size={14} /></button>
                 </div>
               </div>
             </div>
@@ -596,11 +1163,9 @@ function Planejamentos({ planta, usuario }) {
 
       {finalizados.length > 0 && (
         <>
-          <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10, marginTop: 16 }}>
-            ✅ Finalizados ({finalizados.length})
-          </div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10, marginTop: 16 }}>✅ Finalizados ({finalizados.length})</div>
           {finalizados.map(p => (
-            <div key={p.id} className="card" style={{ marginBottom: 10, opacity: 0.7 }}>
+            <div key={p.id} className="card" style={{ marginBottom: 10, opacity: 0.8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => abrirDetalhe(p)}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
@@ -610,41 +1175,27 @@ function Planejamentos({ planta, usuario }) {
                     {p.iniciado_em && p.finalizado_em && (() => {
                       const min = Math.floor((new Date(p.finalizado_em) - new Date(p.iniciado_em)) / 60000)
                       const previsto = (p.chapas_cortar || p.total_chapas || 0) * (p.tempo_chapa || 0)
-                      const perf = previsto > 0 ? Math.round((previsto / min) * 100) : null
+                      const perf = previsto > 0 && min > 0 ? Math.round((previsto / min) * 100) : null
                       if (!perf) return null
-                      return (
-                        <span style={{
-                          background: perf >= 100 ? 'rgba(0,255,136,.2)' : perf >= 80 ? 'rgba(255,214,10,.2)' : 'rgba(255,61,90,.2)',
-                          color: perf >= 100 ? 'var(--green)' : perf >= 80 ? 'var(--yellow)' : 'var(--red)',
-                          fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4
-                        }}>
-                          {perf >= 110 ? '🚀' : perf >= 100 ? '🟢' : perf >= 80 ? '🟡' : '🔴'} {Math.min(perf, 999)}%
-                        </span>
-                      )
+                      return <span style={{ background: perf >= 100 ? 'rgba(0,255,136,.2)' : perf >= 80 ? 'rgba(255,214,10,.2)' : 'rgba(255,61,90,.2)', color: perf >= 100 ? 'var(--green)' : perf >= 80 ? 'var(--yellow)' : 'var(--red)', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4 }}>
+                        {perf >= 110 ? '🚀' : perf >= 100 ? '🟢' : perf >= 80 ? '🟡' : '🔴'} {Math.min(perf, 999)}%
+                      </span>
                     })()}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--muted)' }}>🖨️ {p.maquina} · {p.total_chapas} chapas · {nomeTurno(p.turno)}</div>
                   <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>👤 {p.usuario_nome} · {formatarData(p.criado_em)}</div>
                   {p.iniciado_em && p.finalizado_em && (
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                      ⏱️ Duração: {formatarTempo(Math.floor((new Date(p.finalizado_em) - new Date(p.iniciado_em)) / 60000))}
-                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>⏱️ Duração: {formatarTempo(Math.floor((new Date(p.finalizado_em) - new Date(p.iniciado_em)) / 60000))}</div>
                   )}
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {isLiderOuMais && (
                     <>
-                      <button onClick={() => abrirEdicao(p)} style={{ background: 'rgba(0,229,255,.1)', border: '1px solid rgba(0,229,255,.3)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: 'var(--accent)' }}>
-                        <Pencil size={14} />
-                      </button>
-                      <button onClick={() => excluir(p.id)} style={{ background: 'rgba(255,61,90,.1)', border: '1px solid rgba(255,61,90,.3)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: 'var(--red)' }}>
-                        🗑️
-                      </button>
+                      <button onClick={() => abrirEdicao(p)} style={{ background: 'rgba(0,229,255,.1)', border: '1px solid rgba(0,229,255,.3)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: 'var(--accent)' }}><Pencil size={14} /></button>
+                      <button onClick={() => excluir(p.id)} style={{ background: 'rgba(255,61,90,.1)', border: '1px solid rgba(255,61,90,.3)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: 'var(--red)' }}>🗑️</button>
                     </>
                   )}
-                  <button onClick={() => setReportando({ job: p.job, maquina: p.maquina })} style={{ background: 'rgba(255,107,53,.15)', border: '1px solid rgba(255,107,53,.4)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: '#ff6b35' }}>
-                    <AlertTriangle size={14} />
-                  </button>
+                  <button onClick={() => setReportando({ job: p.job, maquina: p.maquina })} style={{ background: 'rgba(255,107,53,.15)', border: '1px solid rgba(255,107,53,.4)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: '#ff6b35' }}><AlertTriangle size={14} /></button>
                 </div>
               </div>
             </div>
@@ -660,17 +1211,7 @@ function Planejamentos({ planta, usuario }) {
                 <div style={{ fontWeight: 700, fontSize: 14 }}>Job {detalhe.job}</div>
                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>{detalhe.maquina} · {detalhe.total_chapas} chapas · {nomeTurno(detalhe.turno)}</div>
               </div>
-              <button onClick={() => { setDetalhe(null); setOrdens([]) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}>
-                <X size={20} />
-              </button>
-            </div>
-            <div style={{ background: 'rgba(255,214,10,.08)', border: '1px solid rgba(255,214,10,.3)', borderRadius: 10, padding: '10px 14px', marginBottom: 12 }}>
-              <div style={{ fontSize: 12, color: 'var(--muted)' }}>👤 {detalhe.usuario_nome} · {new Date(detalhe.criado_em).toLocaleString('pt-BR')}</div>
-              {detalhe.tempo_chapa && (
-                <div style={{ fontSize: 12, color: 'var(--accent)', marginTop: 4 }}>
-                  ⏱️ {formatarTempo((detalhe.chapas_cortar || detalhe.total_chapas) * detalhe.tempo_chapa)} estimado · {formatarTempo(detalhe.tempo_chapa)}/chapa
-                </div>
-              )}
+              <button onClick={() => { setDetalhe(null); setOrdens([]) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}><X size={20} /></button>
             </div>
             <BarraProgresso feitas={detalhe.chapas_feitas || 0} total={detalhe.chapas_cortar || detalhe.total_chapas} cor="var(--yellow)" />
             <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, margin: '16px 0 10px' }}>Ordens do job</div>
@@ -732,19 +1273,11 @@ function Planejamentos({ planta, usuario }) {
               <label>Status</label>
               <div style={{ display: 'flex', gap: 8 }}>
                 {[{ key: false, label: '⏳ Pendente' }, { key: true, label: '✅ Finalizado' }].map(({ key, label }) => (
-                  <button key={String(key)} onClick={() => setEditando(p => ({ ...p, finalizado: key }))} style={{
-                    flex: 1, padding: '10px', border: '1px solid',
-                    borderColor: editando.finalizado === key ? 'var(--accent)' : 'var(--border)',
-                    background: editando.finalizado === key ? 'rgba(0,229,255,.1)' : 'var(--surface2)',
-                    color: editando.finalizado === key ? 'var(--accent)' : 'var(--muted)',
-                    borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer'
-                  }}>{label}</button>
+                  <button key={String(key)} onClick={() => setEditando(p => ({ ...p, finalizado: key }))} style={{ flex: 1, padding: '10px', border: '1px solid', borderColor: editando.finalizado === key ? 'var(--accent)' : 'var(--border)', background: editando.finalizado === key ? 'rgba(0,229,255,.1)' : 'var(--surface2)', color: editando.finalizado === key ? 'var(--accent)' : 'var(--muted)', borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>{label}</button>
                 ))}
               </div>
             </div>
-            <button className="btn-primary" onClick={salvarEdicao} disabled={salvandoEdit}>
-              {salvandoEdit ? 'Salvando...' : '✅ Salvar alterações'}
-            </button>
+            <button className="btn-primary" onClick={salvarEdicao} disabled={salvandoEdit}>{salvandoEdit ? 'Salvando...' : '✅ Salvar alterações'}</button>
           </div>
         </div>
       )}
@@ -801,7 +1334,7 @@ function Relatorio({ planta, usuario }) {
     <div className="empty">
       <div className="emoji">📊</div>
       <h3>Nenhum apontamento</h3>
-      <p>Apontar produção no formulário Laser</p>
+      <p>Apontar produção na aba Apontar</p>
     </div>
   )
 
@@ -822,11 +1355,7 @@ function Relatorio({ planta, usuario }) {
                 <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>👤 {usuarioNome} · {formatarData(data)}</div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <button onClick={() => setReportando({ job, maquina })} style={{
-                  background: 'rgba(255,107,53,.15)', border: '1px solid rgba(255,107,53,.4)',
-                  borderRadius: 8, padding: '6px 8px', cursor: 'pointer',
-                  color: '#ff6b35', display: 'flex', alignItems: 'center'
-                }}>
+                <button onClick={() => setReportando({ job, maquina })} style={{ background: 'rgba(255,107,53,.15)', border: '1px solid rgba(255,107,53,.4)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: '#ff6b35', display: 'flex', alignItems: 'center' }}>
                   <AlertTriangle size={14} />
                 </button>
                 <div style={{ fontSize: 20, color: 'var(--muted)' }}>{isAberto ? '▲' : '▼'}</div>
@@ -841,7 +1370,6 @@ function Relatorio({ planta, usuario }) {
                   const apontado = a.qtd_real || 0
                   const diffApp = apontado - planejado
                   const diffSfcc = sfcc - planejado
-
                   return (
                     <div key={i} style={{ marginBottom: 14, padding: '12px', background: 'var(--surface2)', borderRadius: 10 }}>
                       <div style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, marginBottom: 10 }}>{a.item_ccs}</div>
@@ -852,20 +1380,12 @@ function Relatorio({ planta, usuario }) {
                           <div style={{ fontFamily: 'monospace', fontSize: 18, fontWeight: 700 }}>{planejado}</div>
                           <div style={{ fontSize: 10, color: 'var(--muted)' }}>peças</div>
                         </div>
-                        <div style={{
-                          background: apontado >= planejado ? 'rgba(0,255,136,.1)' : 'rgba(255,61,90,.1)',
-                          border: `1px solid ${apontado >= planejado ? 'rgba(0,255,136,.3)' : 'rgba(255,61,90,.3)'}`,
-                          borderRadius: 8, padding: '10px 8px', textAlign: 'center'
-                        }}>
+                        <div style={{ background: apontado >= planejado ? 'rgba(0,255,136,.1)' : 'rgba(255,61,90,.1)', border: `1px solid ${apontado >= planejado ? 'rgba(0,255,136,.3)' : 'rgba(255,61,90,.3)'}`, borderRadius: 8, padding: '10px 8px', textAlign: 'center' }}>
                           <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>✅ NO APP</div>
                           <div style={{ fontFamily: 'monospace', fontSize: 18, fontWeight: 700, color: apontado >= planejado ? 'var(--green)' : 'var(--red)' }}>{apontado}</div>
                           <div style={{ fontSize: 10, fontWeight: 700, color: apontado >= planejado ? 'var(--green)' : 'var(--red)' }}>{diffApp >= 0 ? `+${diffApp}` : diffApp}</div>
                         </div>
-                        <div style={{
-                          background: sfcc >= planejado ? 'rgba(0,229,255,.1)' : 'rgba(255,214,10,.1)',
-                          border: `1px solid ${sfcc >= planejado ? 'rgba(0,229,255,.3)' : 'rgba(255,214,10,.3)'}`,
-                          borderRadius: 8, padding: '10px 8px', textAlign: 'center'
-                        }}>
+                        <div style={{ background: sfcc >= planejado ? 'rgba(0,229,255,.1)' : 'rgba(255,214,10,.1)', border: `1px solid ${sfcc >= planejado ? 'rgba(0,229,255,.3)' : 'rgba(255,214,10,.3)'}`, borderRadius: 8, padding: '10px 8px', textAlign: 'center' }}>
                           <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>🖥️ SISTEMA</div>
                           <div style={{ fontFamily: 'monospace', fontSize: 18, fontWeight: 700, color: sfcc >= planejado ? 'var(--accent)' : 'var(--yellow)' }}>{sfcc}</div>
                           <div style={{ fontSize: 10, fontWeight: 700, color: sfcc >= planejado ? 'var(--accent)' : 'var(--yellow)' }}>{diffSfcc >= 0 ? `+${diffSfcc}` : diffSfcc}</div>
@@ -884,7 +1404,6 @@ function Relatorio({ planta, usuario }) {
           </div>
         )
       })}
-
       {reportando && <ModalReporte item={reportando} onClose={() => setReportando(null)} usuario={usuario} />}
     </>
   )
