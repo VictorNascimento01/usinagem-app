@@ -300,6 +300,8 @@ function PlanejarCorte({ planta, usuario }) {
   const [chapasParcial, setChapasParcial] = useState('')
   const [cncs, setCncs] = useState([])
   const [nestingEncontrado, setNestingEncontrado] = useState(false)
+  const [itensPorCNCNesting, setItensPorCNCNesting] = useState({})
+  const [cncExpandido, setCncExpandido] = useState(null)
   const [loading, setLoading] = useState(false)
   const [salvando, setSalvando] = useState(false)
   const [toast, setToast] = useState(null)
@@ -354,7 +356,7 @@ function PlanejarCorte({ planta, usuario }) {
       }
     }
 
-    const { data: nestingRows } = await supabase.from('nesting').select('programa, qtd_chapa, tempo_corte_total').ilike('tarefa', `%${job}%`).order('programa')
+    const { data: nestingRows } = await supabase.from('nesting').select('programa, qtd_chapa, tempo_corte_total, ordem, item, qtd_nesting').ilike('tarefa', `%${job}%`).order('programa')
 
     if (nestingRows && nestingRows.length > 0) {
       const programasVistos = {}
@@ -371,11 +373,20 @@ function PlanejarCorte({ planta, usuario }) {
       })
       setCncs(cncsDoNesting)
       setNestingEncontrado(true)
+
+      // Agrupa itens por CNC
+      const itensPorProg = {}
+      nestingRows.forEach(row => {
+        if (!itensPorProg[row.programa]) itensPorProg[row.programa] = []
+        if (row.item) itensPorProg[row.programa].push({ item: row.item, ordem: row.ordem, qtd: row.qtd_nesting })
+      })
+      setItensPorCNCNesting(itensPorProg)
+
       const totalChapasNesting = Object.values(programasVistos).reduce((s, r) => s + (parseInt(r.qtd_chapa) || 0), 0)
       setTotalChapas(String(totalChapasNesting))
       showToast(`✅ ${cncsDoNesting.length} CNC(s) importados do nesting!`)
     } else {
-      setCncs([]); setNestingEncontrado(false)
+      setCncs([]); setNestingEncontrado(false); setItensPorCNCNesting({})
     }
 
     setOrdens(data || [])
@@ -408,7 +419,8 @@ function PlanejarCorte({ planta, usuario }) {
     else {
       showToast('✅ Planejamento salvo!')
       setJob(''); setTotalChapas(''); setChapasParcial(''); setTipoCort('total')
-      setOrdens([]); setCncs([]); setNestingEncontrado(false); setTurno(detectarTurno())
+      setOrdens([]); setCncs([]); setNestingEncontrado(false); setItensPorCNCNesting({})
+      setCncExpandido(null); setTurno(detectarTurno())
     }
   }
 
@@ -507,11 +519,12 @@ function PlanejarCorte({ planta, usuario }) {
             )}
             {cncs.map((cnc, idx) => {
               const tempoTotal = tempoTotalCNC(cnc)
+              const itensDosCNC = itensPorCNCNesting[cnc.codigo] || []
               return (
                 <div key={idx} style={{ background: 'var(--surface2)', borderRadius: 10, padding: '12px', marginBottom: 8, border: nestingEncontrado ? '1px solid rgba(0,255,136,.2)' : '1px solid var(--border)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                     <div style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: '#000' }}>{idx + 1}</div>
-                    <div style={{ flex: 1, fontWeight: 700, fontSize: 13 }}>CNC {idx + 1}</div>
+                    <div style={{ flex: 1, fontWeight: 700, fontSize: 13 }}>CNC {idx + 1}{cnc.codigo ? ` — ${cnc.codigo}` : ''}</div>
                     {tempoTotal > 0 && <div style={{ background: 'rgba(0,229,255,.1)', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700, color: 'var(--accent)' }}>⏱️ {formatarTempo(tempoTotal)}</div>}
                     <button onClick={() => removerCNC(idx)} style={{ background: 'rgba(255,61,90,.1)', border: '1px solid rgba(255,61,90,.3)', borderRadius: 6, padding: '4px 6px', cursor: 'pointer', color: 'var(--red)' }}><Trash2 size={12} /></button>
                   </div>
@@ -538,6 +551,24 @@ function PlanejarCorte({ planta, usuario }) {
                       </div>
                     </div>
                   </div>
+                  {/* Itens do nesting para este CNC */}
+                  {itensDosCNC.length > 0 && (
+                    <div style={{ marginTop: 10 }}>
+                      <button onClick={() => setCncExpandido(cncExpandido === idx ? null : idx)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 11, padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        {cncExpandido === idx ? '▼' : '▶'} {itensDosCNC.length} item(s) neste CNC
+                      </button>
+                      {cncExpandido === idx && (
+                        <div style={{ marginTop: 6, background: 'rgba(0,229,255,.04)', borderRadius: 6, padding: '6px 10px' }}>
+                          {itensDosCNC.map((it, i) => (
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, padding: '4px 0', borderBottom: i < itensDosCNC.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                              <span style={{ fontFamily: 'monospace', color: 'var(--text)' }}>{it.item}</span>
+                              <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{it.qtd} pç</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -669,7 +700,6 @@ function ApontarProducao({ planta, usuario }) {
   }
 
   const cncs = planejamento?.cncs || []
-  const cncAtivoObj = cncs[cncAtivo] || null
 
   return (
     <>
@@ -699,18 +729,36 @@ function ApontarProducao({ planta, usuario }) {
         <div className="card" style={{ marginBottom: 12 }}>
           <div className="card-title">🎯 Qual CNC está cortando agora?</div>
           {cncs.map((cnc, idx) => (
-            <div key={idx} onClick={() => selecionarCNC(idx)} style={{
-              padding: '12px', marginBottom: 8,
-              background: cncAtivo === idx ? 'rgba(0,229,255,.08)' : 'var(--surface2)',
-              border: `2px solid ${cncAtivo === idx ? 'var(--accent)' : 'var(--border)'}`,
-              borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12
-            }}>
-              <div style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: cncAtivo === idx ? 'var(--accent)' : 'var(--surface)', border: `2px solid ${cncAtivo === idx ? 'var(--accent)' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: cncAtivo === idx ? '#000' : 'var(--muted)' }}>{cnc.numero}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 13, color: cncAtivo === idx ? 'var(--accent)' : 'var(--text)' }}>CNC {cnc.numero}{cnc.codigo ? ` — ${cnc.codigo}` : ''}</div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{cnc.chapas || 1} chapa{(cnc.chapas || 1) > 1 ? 's' : ''}{cnc.tempoPorChapa > 0 ? ` · ${formatarTempo(cnc.tempoPorChapa)}/chapa` : ''}</div>
+            <div key={idx} style={{ marginBottom: 8 }}>
+              <div onClick={() => selecionarCNC(idx)} style={{
+                padding: '12px',
+                background: cncAtivo === idx ? 'rgba(0,229,255,.08)' : 'var(--surface2)',
+                border: `2px solid ${cncAtivo === idx ? 'var(--accent)' : 'var(--border)'}`,
+                borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12
+              }}>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', flexShrink: 0, background: cncAtivo === idx ? 'var(--accent)' : 'var(--surface)', border: `2px solid ${cncAtivo === idx ? 'var(--accent)' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: cncAtivo === idx ? '#000' : 'var(--muted)' }}>{cnc.numero}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: cncAtivo === idx ? 'var(--accent)' : 'var(--text)' }}>CNC {cnc.numero}{cnc.codigo ? ` — ${cnc.codigo}` : ''}</div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                    {cnc.chapas || 1} chapa{(cnc.chapas || 1) > 1 ? 's' : ''}
+                    {cnc.tempoPorChapa > 0 ? ` · ${formatarTempo(cnc.tempoPorChapa)}/chapa` : ''}
+                    {itensPorCNC[cnc.codigo] ? ` · ${itensPorCNC[cnc.codigo].length} item(s)` : ''}
+                  </div>
+                </div>
+                {cncAtivo === idx && <div style={{ background: 'var(--accent)', color: '#000', borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700 }}>▶ Ativo</div>}
               </div>
-              {cncAtivo === idx && <div style={{ background: 'var(--accent)', color: '#000', borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700 }}>▶ Ativo</div>}
+              {/* Itens do CNC quando ativo */}
+              {cncAtivo === idx && itensPorCNC[cnc.codigo] && (
+                <div style={{ background: 'rgba(0,229,255,.04)', border: '1px solid rgba(0,229,255,.15)', borderRadius: '0 0 8px 8px', padding: '8px 12px', marginTop: -4 }}>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Itens deste CNC</div>
+                  {itensPorCNC[cnc.codigo].map((it, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, padding: '3px 0', borderBottom: i < itensPorCNC[cnc.codigo].length - 1 ? '1px solid var(--border)' : 'none' }}>
+                      <span style={{ fontFamily: 'monospace', color: 'var(--text)' }}>{it.item}</span>
+                      <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{it.qtd_nesting} pç</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -858,7 +906,6 @@ function Sequencia({ planta, usuario }) {
     const chapasRestantes = chapasTotal - chapasFeitas
     const previsto = chapasTotal * job.tempo_chapa
     const tempoRestantePrevisto = chapasRestantes * job.tempo_chapa
-
     if (decorridoMin > previsto && chapasRestantes > 0) {
       const chave = `critico-${job.id}`
       if (!alertasEnviados.has(chave)) {
@@ -938,64 +985,32 @@ function Sequencia({ planta, usuario }) {
 
             return (
               <div key={job.id} style={{ padding: '14px 16px', borderTop: '1px solid var(--border)' }}>
-
-                {/* Banner pausa */}
                 {pausado && (
                   <div style={{ background: 'rgba(255,214,10,.12)', border: '1px solid rgba(255,214,10,.5)', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontSize: 12, fontWeight: 700, color: 'var(--yellow)' }}>
                     ⏸️ Pausado — {job.pausas?.[job.pausas.length - 1]?.motivo || 'Pausa'}
                   </div>
                 )}
-
-                {/* Alerta prazo */}
                 {alerta && (
-                  <div style={{
-                    background: alerta.nivel === 'critico' ? 'rgba(255,61,90,.15)' : 'rgba(255,214,10,.12)',
-                    border: `1px solid ${alerta.nivel === 'critico' ? 'rgba(255,61,90,.5)' : 'rgba(255,214,10,.5)'}`,
-                    borderRadius: 8, padding: '8px 12px', marginBottom: 10,
-                    fontSize: 12, fontWeight: 700,
-                    color: alerta.nivel === 'critico' ? 'var(--red)' : 'var(--yellow)'
-                  }}>
+                  <div style={{ background: alerta.nivel === 'critico' ? 'rgba(255,61,90,.15)' : 'rgba(255,214,10,.12)', border: `1px solid ${alerta.nivel === 'critico' ? 'rgba(255,61,90,.5)' : 'rgba(255,214,10,.5)'}`, borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontSize: 12, fontWeight: 700, color: alerta.nivel === 'critico' ? 'var(--red)' : 'var(--yellow)' }}>
                     {alerta.msg}
                   </div>
                 )}
-
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                  <div style={{
-                    width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-                    background: idx === 0 ? 'var(--accent)' : 'var(--surface2)',
-                    border: `2px solid ${idx === 0 ? 'var(--accent)' : 'var(--border)'}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontFamily: 'monospace', fontSize: 13, fontWeight: 700,
-                    color: idx === 0 ? '#000' : 'var(--muted)'
-                  }}>{idx + 1}</div>
-
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, background: idx === 0 ? 'var(--accent)' : 'var(--surface2)', border: `2px solid ${idx === 0 ? 'var(--accent)' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: idx === 0 ? '#000' : 'var(--muted)' }}>{idx + 1}</div>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2, flexWrap: 'wrap' }}>
                       <div style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700 }}>{job.job}</div>
-                      <span style={{ background: job.tipo === 'parcial' ? 'rgba(255,107,53,.2)' : 'rgba(0,255,136,.2)', color: job.tipo === 'parcial' ? '#ff6b35' : 'var(--green)', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4 }}>
-                        {job.tipo === 'parcial' ? '⚡ Parcial' : '✅ Total'}
-                      </span>
-                      {job.estab && (
-                        <span style={{ background: job.estab === '100' ? 'rgba(0,229,255,.15)' : 'rgba(0,255,136,.15)', color: job.estab === '100' ? 'var(--accent)' : 'var(--green)', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4 }}>
-                          {job.estab === '100' ? 'Limeira' : 'Palmeira'}
-                        </span>
-                      )}
+                      <span style={{ background: job.tipo === 'parcial' ? 'rgba(255,107,53,.2)' : 'rgba(0,255,136,.2)', color: job.tipo === 'parcial' ? '#ff6b35' : 'var(--green)', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4 }}>{job.tipo === 'parcial' ? '⚡ Parcial' : '✅ Total'}</span>
+                      {job.estab && <span style={{ background: job.estab === '100' ? 'rgba(0,229,255,.15)' : 'rgba(0,255,136,.15)', color: job.estab === '100' ? 'var(--accent)' : 'var(--green)', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4 }}>{job.estab === '100' ? 'Limeira' : 'Palmeira'}</span>}
                     </div>
-
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>
-                      👤 {job.usuario_nome} · {formatarHora(job.criado_em)}
-                    </div>
-
-                    {/* Cronômetro */}
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>👤 {job.usuario_nome} · {formatarHora(job.criado_em)}</div>
                     {iniciado && cronometro && (
                       <div style={{ background: pausado ? 'rgba(255,214,10,.08)' : 'rgba(0,229,255,.08)', border: `1px solid ${pausado ? 'rgba(255,214,10,.2)' : 'rgba(0,229,255,.2)'}`, borderRadius: 8, padding: '8px 12px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 2 }}>{pausado ? '⏸️ Pausado' : '⏱️ Em corte'}</div>
                           <div style={{ fontFamily: 'monospace', fontSize: 20, fontWeight: 700, color: pausado ? 'var(--yellow)' : 'var(--accent)', letterSpacing: 2 }}>{cronometro}</div>
                           {(job.pausas || []).filter(p => p.fim).length > 0 && (
-                            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
-                              ⏸️ {(job.pausas || []).filter(p => p.fim).length} pausa(s) · {formatarTempo(tempoTotalPausado(job))} total pausado
-                            </div>
+                            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>⏸️ {(job.pausas || []).filter(p => p.fim).length} pausa(s) · {formatarTempo(tempoTotalPausado(job))} pausado</div>
                           )}
                         </div>
                         {perf && !pausado && (
@@ -1009,30 +1024,20 @@ function Sequencia({ planta, usuario }) {
                         )}
                       </div>
                     )}
-
                     {tempoRestante !== null && !pausado && (
                       <div style={{ fontSize: 11, color: 'var(--accent)', marginBottom: 4, display: 'flex', gap: 10 }}>
                         <span>⏱️ {formatarTempo(tempoRestante)} restante</span>
                         {previsao && <span style={{ color: 'var(--green)', fontWeight: 700 }}>🏁 {previsao}</span>}
                       </div>
                     )}
-
                     <BarraProgresso feitas={chapasFeitas} total={chapasTotal} cor="var(--yellow)" />
                   </div>
-
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {!iniciado && (
-                      <button onClick={() => iniciar(job)} style={{ background: 'rgba(0,229,255,.15)', border: '1px solid rgba(0,229,255,.4)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: 'var(--accent)', fontSize: 11, fontWeight: 700 }}>▶ Iniciar</button>
-                    )}
+                    {!iniciado && <button onClick={() => iniciar(job)} style={{ background: 'rgba(0,229,255,.15)', border: '1px solid rgba(0,229,255,.4)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: 'var(--accent)', fontSize: 11, fontWeight: 700 }}>▶ Iniciar</button>}
                     {iniciado && !pausado && (
-                      <button onClick={() => {
-                        const motivo = prompt('Motivo da pausa?') || 'Pausa'
-                        pausar(job, motivo)
-                      }} style={{ background: 'rgba(255,214,10,.15)', border: '1px solid rgba(255,214,10,.4)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: 'var(--yellow)', fontSize: 13, fontWeight: 700 }}>⏸️</button>
+                      <button onClick={() => { const motivo = prompt('Motivo da pausa?') || 'Pausa'; pausar(job, motivo) }} style={{ background: 'rgba(255,214,10,.15)', border: '1px solid rgba(255,214,10,.4)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: 'var(--yellow)', fontSize: 13, fontWeight: 700 }}>⏸️</button>
                     )}
-                    {iniciado && pausado && (
-                      <button onClick={() => retomar(job)} style={{ background: 'rgba(0,255,136,.15)', border: '1px solid rgba(0,255,136,.4)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: 'var(--green)', fontSize: 11, fontWeight: 700 }}>▶ Retomar</button>
-                    )}
+                    {iniciado && pausado && <button onClick={() => retomar(job)} style={{ background: 'rgba(0,255,136,.15)', border: '1px solid rgba(0,255,136,.4)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: 'var(--green)', fontSize: 11, fontWeight: 700 }}>▶ Retomar</button>}
                     <button onClick={() => marcarChapa(job)} style={{ background: 'rgba(0,255,136,.15)', border: '1px solid rgba(0,255,136,.3)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700 }}>
                       <Check size={13} /> +1
                     </button>
