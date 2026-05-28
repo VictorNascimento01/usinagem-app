@@ -455,7 +455,7 @@ export default function Indicadores({ usuario }) {
   const [nestingPorMaquina, setNestingPorMaquina] = useState({})
   const [loading, setLoading] = useState(true)
   const [agora, setAgora] = useState(new Date())
-  const [planta, setPlanta] = useState(usuario?.estab === 'todas' ? '' : usuario?.estab || '')
+  const [planta, setPlanta] = useState(usuario?.estab === 'todas' || usuario?.ver_todas_plantas ? '' : usuario?.estab || '')
   const [modal, setModal] = useState(null)
   const [modalData, setModalData] = useState(null)
   const [abaIndicador, setAbaIndicador] = useState('geral')
@@ -572,7 +572,7 @@ export default function Indicadores({ usuario }) {
         <button onClick={carregarDados} style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', color: 'var(--muted)', fontSize: 12 }}>🔄</button>
       </div>
 
-      {usuario?.estab === 'todas' && (
+      {(usuario?.estab === 'todas' || usuario?.ver_todas_plantas) && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           {[
             { key: '', label: '🏭 Todas' },
