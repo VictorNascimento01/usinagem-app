@@ -335,7 +335,7 @@ function ModalMaquina({ maquina, tarefas, onClose }) {
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 16, color: 'var(--yellow)' }}>{maquina.toUpperCase()}</div>
-            <div style={{ fontSize: 12, color: 'var(--muted)' }}>{tarefas.length} job(s) · {formatarTempo(totalMin)} total · ~{diasNecessarios} dia(s)</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>{tarefas.length} tarefa(s) · {formatarTempo(totalMin)} total · ~{diasNecessarios} dia(s)</div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}><X size={20} /></button>
         </div>
@@ -343,7 +343,7 @@ function ModalMaquina({ maquina, tarefas, onClose }) {
         <div style={{ overflowY: 'auto', flex: 1, padding: 16 }}>
           <GraficoBarrasSemana tarefas={tarefas} tarefaCores={tarefaCores} />
           <div style={{ marginTop: 20 }}>
-            <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Jobs na fila</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Tarefas na fila</div>
             {tarefas.map((t) => {
               const pctDia = Math.round((t.tempo / CAP_DIA) * 100)
               return (
@@ -351,15 +351,12 @@ function ModalMaquina({ maquina, tarefas, onClose }) {
                   <div style={{ width: 10, height: 10, borderRadius: 2, background: tarefaCores[t.tarefa], flexShrink: 0 }} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700 }}>{t.tarefa}</div>
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                      {t.turno ? `${t.turno}º Turno` : ''}{t.chapas ? ` · ${t.chapas} chapas` : ''}
-                    </div>
                     <div style={{ height: 4, background: 'var(--surface2)', borderRadius: 99, overflow: 'hidden', marginTop: 4 }}>
                       <div style={{ height: '100%', width: `${Math.min(pctDia, 100)}%`, background: tarefaCores[t.tarefa], borderRadius: 99 }} />
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)' }}>{formatarTempo(t.tempo)}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: pctDia > 100 ? 'var(--red)' : 'var(--accent)' }}>{formatarTempo(t.tempo)}</div>
                     <div style={{ fontSize: 10, color: 'var(--muted)' }}>{pctDia}% de 1 dia</div>
                   </div>
                 </div>
@@ -406,33 +403,68 @@ export default function Indicadores({ usuario }) {
     if (planta) qLanc = qLanc.eq('estab', planta)
     const { data: lancs } = await qLanc
 
-    let qCarga = supabase.from('laser_planejamento').select('*').eq('finalizado', false)
-    if (planta) qCarga = qCarga.eq('estab', planta)
-    const { data: pendentesAll } = await qCarga
+    // Carga: usa nesting com deduplicação apenas por programa
+    const { data: nestingRows } = await supabase
+      .from('nesting')
+      .select('maquina, tarefa, programa, tempo_corte_total, estab')
 
-    const resultado = {}
-    ;(pendentesAll || []).forEach(p => {
-      const maq = (p.maquina || '—').trim()
-      if (!resultado[maq]) resultado[maq] = []
-      let tempoTotal = 0
-      if (p.cncs && p.cncs.length > 0) {
-        tempoTotal = p.cncs.reduce((s, c) => s + (c.tempoTotal || 0), 0)
-      } else if (p.tempo_chapa) {
-        tempoTotal = (p.chapas_cortar || p.total_chapas || 0) * p.tempo_chapa
-      }
-      if (tempoTotal > 0) {
-        resultado[maq].push({
-          tarefa: p.job,
-          tempo: Math.round(tempoTotal),
-          turno: p.turno,
-          chapas: p.chapas_cortar || p.total_chapas || 0,
-          id: p.id
-        })
-      }
+    // Tarefas finalizadas no laser para abater
+    const { data: finalizados } = await supabase
+      .from('laser_planejamento')
+      .select('job, maquina')
+      .eq('finalizado', true)
+
+    const tarefasFinalizadas = new Set()
+    ;(finalizados || []).forEach(p => {
+      tarefasFinalizadas.add(`${(p.maquina || '').trim()}|${(p.job || '').trim()}`)
     })
 
-    Object.keys(resultado).forEach(maq => {
-      resultado[maq].sort((a, b) => (a.turno || '9').localeCompare(b.turno || '9'))
+    // Deduplicação: cada programa conta UMA VEZ no total
+    // programa → { maquina, tarefa, tempo }
+    const programasVistos = {}
+
+    ;(nestingRows || []).forEach(row => {
+      // Filtro por planta
+      if (planta) {
+        const estabNesting = String(row.estab || '').toLowerCase()
+        const plantaNome = planta === '100' ? 'limeira' : 'palmeira'
+        if (!estabNesting.includes(plantaNome)) return
+      }
+
+      const prog = (row.programa || '').trim()
+      if (!prog) return
+
+      // Cada programa só entra uma vez
+      if (programasVistos[prog]) return
+
+      const maq = (row.maquina || '—').trim()
+      const tar = (row.tarefa || '—').trim()
+      const tempoH = parseFloat(String(row.tempo_corte_total || 0).replace(',', '.')) || 0
+      const tempoMin = Math.round(tempoH * 60)
+
+      if (tempoMin <= 0) return
+
+      programasVistos[prog] = { maquina: maq, tarefa: tar, tempo: tempoMin }
+    })
+
+    // Agrupa por máquina → tarefa somando os programas únicos
+    const porMaquinaTemp = {}
+    Object.values(programasVistos).forEach(({ maquina, tarefa, tempo }) => {
+      if (!porMaquinaTemp[maquina]) porMaquinaTemp[maquina] = {}
+      if (!porMaquinaTemp[maquina][tarefa]) porMaquinaTemp[maquina][tarefa] = 0
+      porMaquinaTemp[maquina][tarefa] += tempo
+    })
+
+    // Monta array final removendo tarefas finalizadas
+    const resultado = {}
+    Object.entries(porMaquinaTemp).forEach(([maq, tarefas]) => {
+      const lista = Object.entries(tarefas)
+        .map(([tarefa, tempo]) => ({ tarefa, tempo }))
+        .filter(t => t.tempo > 0)
+        .filter(t => !tarefasFinalizadas.has(`${maq}|${t.tarefa}`))
+        .sort((a, b) => b.tempo - a.tempo)
+
+      if (lista.length > 0) resultado[maq] = lista
     })
 
     setPorMaquina(resultado)
@@ -443,7 +475,7 @@ export default function Indicadores({ usuario }) {
   }
 
   const pendentes = planejamentos.filter(p => !p.finalizado)
-  const finalizados = planejamentos.filter(p => p.finalizado)
+  const finalizadosHoje = planejamentos.filter(p => p.finalizado)
   const totalChapasPlanejadasHoje = planejamentos.reduce((s, p) => s + (p.chapas_cortar || p.total_chapas || 0), 0)
   const totalChapasFeitas = planejamentos.reduce((s, p) => s + (p.chapas_feitas || 0), 0)
   const pctChapas = totalChapasPlanejadasHoje > 0 ? Math.round((totalChapasFeitas / totalChapasPlanejadasHoje) * 100) : 0
@@ -533,7 +565,7 @@ export default function Indicadores({ usuario }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 }}>
             {[
               { label: 'Pendentes', valor: pendentes.length, cor: pendentes.length > 0 ? 'var(--yellow)' : 'var(--green)', onClick: () => { setModalData(pendentes); setModal('pendentes') } },
-              { label: 'Finalizados', valor: finalizados.length, cor: 'var(--green)', onClick: () => { setModalData(finalizados); setModal('finalizados') } },
+              { label: 'Finalizados', valor: finalizadosHoje.length, cor: 'var(--green)', onClick: () => { setModalData(finalizadosHoje); setModal('finalizados') } },
               { label: 'Jobs hoje', valor: planejamentos.length, cor: 'var(--accent)', onClick: () => { setModalData(planejamentos); setModal('todos') } },
             ].map(({ label, valor, cor, onClick }) => (
               <div key={label} onClick={onClick} className="card" style={{ padding: 12, textAlign: 'center', marginBottom: 0, cursor: 'pointer' }}>
@@ -614,7 +646,7 @@ export default function Indicadores({ usuario }) {
 
           {abaCarga === 'mes' && (
             Object.keys(porMaquina).length === 0 ? (
-              <div className="empty"><div className="emoji">🗓️</div><h3>Sem jobs pendentes</h3><p>Lance um planejamento na aba Laser</p></div>
+              <div className="empty"><div className="emoji">🗓️</div><h3>Sem dados de nesting</h3></div>
             ) : (
               <div className="card">
                 <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>🗓️ Visão do mês</div>
@@ -628,8 +660,8 @@ export default function Indicadores({ usuario }) {
             Object.keys(porMaquina).length === 0 ? (
               <div className="empty">
                 <div className="emoji">🖨️</div>
-                <h3>Sem jobs pendentes</h3>
-                <p>Lance um planejamento na aba Laser para ver a carga</p>
+                <h3>Sem dados de nesting</h3>
+                <p>Importe o arquivo de nesting pelo monitor</p>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -692,7 +724,7 @@ export default function Indicadores({ usuario }) {
                             <div style={{ height: '100%', width: `${Math.min(pctSemana, 100)}%`, background: cor, borderRadius: 99 }} />
                           </div>
                           <div style={{ fontSize: 10, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
-                            {formatarTempo(totalMin)} · ~{diasNec}d · {tarefas.length} job(s)
+                            {formatarTempo(totalMin)} · ~{diasNec}d · {tarefas.length} tarefa(s)
                           </div>
                         </div>
                         <div style={{ fontSize: 9, color: '#7c3aed', textAlign: 'right', marginTop: 6, fontWeight: 700 }}>ver semana detalhada ›</div>
