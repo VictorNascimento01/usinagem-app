@@ -102,14 +102,14 @@ def ler_nesting(caminho):
                 rows.append({
                     'tarefa': tarefa,
                     'programa': programa,
-                    'maquina': (r.get('maquina') or r.get('Maquina') or '').strip(),
+                    'maquina': (r.get('maquina') or r.get('Maquina') or r.get('MAQUINA') or '').strip(),
                     'qtd_chapa': int(float(str(r.get('qtd_chapa_cortada') or r.get('qtd_chapa') or 0).replace(',', '.') or 0)),
                     'tempo_corte_total': to_float(r.get('tempo_corte_total') or 0),
                     'ordem': (r.get('ordem') or r.get('Ordem') or '').strip(),
                     'item': (r.get('item') or r.get('Item') or '').strip(),
                     'qtd_nesting': int(float(str(r.get('qtd_nesting') or 0).replace(',', '.') or 0)),
                     'qtd_solicitado': int(float(str(r.get('qtd_solicitado') or 0).replace(',', '.') or 0)),
-                    'estab': (r.get('estab') or r.get('Estab') or '').strip(),
+                    'estab': (r.get('estab.') or r.get('Estab.') or r.get('estab') or r.get('Estab') or '').strip(),
                     'data': (r.get('data') or r.get('Data') or '').strip(),
                 })
             except:
