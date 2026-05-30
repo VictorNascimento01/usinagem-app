@@ -53,34 +53,28 @@ function semanasDoMes() {
 function distribuirNoDias(tarefas, dias) {
   const resultado = {}
   dias.forEach(d => { resultado[d.toISOString().split('T')[0]] = [] })
+
   let diaIdx = 0
   let minUsado = 0
 
   for (const t of tarefas) {
-    let restante = t.tempo || 0
-    if (restante <= 0) continue
+    const tempo = t.tempo || 0
+    if (tempo <= 0) continue
 
-    while (restante > 0 && diaIdx < dias.length) {
-      const key = dias[diaIdx].toISOString().split('T')[0]
-      const capRestante = CAP_DIA - minUsado
+    while (diaIdx < dias.length && minUsado >= CAP_DIA) {
+      diaIdx++
+      minUsado = 0
+    }
 
-      if (capRestante <= 0) {
-        diaIdx++
-        minUsado = 0
-        continue
-      }
+    if (diaIdx >= dias.length) break
 
-      if (restante <= capRestante) {
-        resultado[key].push({ ...t, tempoNoDia: restante })
-        minUsado += restante
-        restante = 0
-      } else {
-        resultado[key].push({ ...t, tempoNoDia: capRestante })
-        minUsado += capRestante
-        restante -= capRestante
-        diaIdx++
-        minUsado = 0
-      }
+    const key = dias[diaIdx].toISOString().split('T')[0]
+    resultado[key].push({ ...t, tempoNoDia: tempo })
+    minUsado += tempo
+
+    if (minUsado >= CAP_DIA) {
+      diaIdx++
+      minUsado = 0
     }
   }
 
@@ -172,65 +166,96 @@ function GraficoBarrasSemana({ tarefas, tarefaCores }) {
           const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
           const ehHoje = dia.getTime() === hoje.getTime()
           const nomeDia = dia.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit' })
+          const estouro = totalDia > CAP_DIA
 
           return (
             <div key={key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <div style={{
                 position: 'relative', height: ALTURA, width: '92%',
                 background: 'var(--surface2)', borderRadius: '4px 4px 0 0',
-                border: ehHoje ? '1px solid rgba(0,229,255,.4)' : '1px solid var(--border)',
-                overflow: 'hidden'
+                border: estouro ? '1px solid rgba(255,61,90,.5)' : ehHoje ? '1px solid rgba(0,229,255,.4)' : '1px solid var(--border)',
+                overflow: 'hidden' // mantém barras dentro
               }}>
+                {/* Fundo turnos */}
                 <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: posT1, background: 'rgba(0,229,255,.05)' }} />
                 <div style={{ position: 'absolute', bottom: posT1, left: 0, right: 0, height: posT2 - posT1, background: 'rgba(255,214,10,.04)' }} />
                 <div style={{ position: 'absolute', bottom: posT2, left: 0, right: 0, height: ALTURA - posT2, background: 'rgba(124,58,237,.04)' }} />
 
+                {/* Linhas tracejadas */}
                 {[{ pos: posT1, cor: 'var(--accent)' }, { pos: posT2, cor: 'var(--yellow)' }].map(({ pos, cor }, i) => (
                   <div key={i} style={{ position: 'absolute', bottom: pos, left: 0, right: 0, borderTop: `1px dashed ${cor}`, zIndex: 2, opacity: 0.5 }} />
                 ))}
 
+                {/* Barras empilhadas */}
                 {(() => {
                   let acum = 0
                   return segs.map((sg, i) => {
                     const bottom = acum * escala
                     const height = Math.max(sg.tempoNoDia * escala, 3)
+                    const extrapolou = (acum + sg.tempoNoDia) > CAP_DIA
                     acum += sg.tempoNoDia
-                    const cor = tarefaCores[sg.tarefa] || '#888'
+                    const cor = extrapolou ? 'var(--red)' : tarefaCores[sg.tarefa] || '#888'
                     const isTooltip = tooltip?.key === key + sg.tarefa + i
+
                     return (
-                      <div key={sg.tarefa + i}
-                        onClick={() => setTooltip(isTooltip ? null : { key: key + sg.tarefa + i, tarefa: sg.tarefa, tempo: sg.tempoNoDia, dia: nomeDia })}
+                      <div
+                        key={sg.tarefa + i}
+                        onClick={() => setTooltip(isTooltip ? null : { key: key + sg.tarefa + i, tarefa: sg.tarefa, tempo: sg.tempoNoDia, dia: nomeDia, extrapolou })}
                         style={{
-                          position: 'absolute', bottom, left: 1, right: 1, height,
-                          background: cor, borderRadius: i === segs.length - 1 ? '3px 3px 0 0' : 1,
-                          zIndex: 3, opacity: isTooltip ? 1 : 0.85, cursor: 'pointer',
+                          position: 'absolute', bottom, left: 1, right: 1,
+                          height,
+                          background: cor,
+                          borderRadius: i === segs.length - 1 ? '3px 3px 0 0' : 1,
+                          zIndex: 3,
+                          opacity: isTooltip ? 1 : 0.85,
+                          cursor: 'pointer',
                           outline: isTooltip ? '1px solid #fff' : 'none',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden'
-                        }}>
-                        {height > 16 && <span style={{ fontSize: 7, fontWeight: 700, color: '#000', textAlign: 'center', padding: '0 2px', lineHeight: 1.1, pointerEvents: 'none' }}>{sg.tarefa.length > 8 ? sg.tarefa.slice(0, 7) + '…' : sg.tarefa}</span>}
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          overflow: 'hidden'
+                        }}
+                      >
+                        {height > 16 && (
+                          <span style={{ fontSize: 7, fontWeight: 700, color: '#000', textAlign: 'center', padding: '0 2px', lineHeight: 1.1, pointerEvents: 'none' }}>
+                            {sg.tarefa.length > 8 ? sg.tarefa.slice(0, 7) + '…' : sg.tarefa}
+                          </span>
+                        )}
                       </div>
                     )
                   })
                 })()}
 
+                {/* Tooltip dentro da barra */}
                 {tooltip && segs.some((sg, i) => tooltip.key === key + sg.tarefa + i) && (
-                  <div style={{ position: 'absolute', top: 4, left: '50%', transform: 'translateX(-50%)', background: 'var(--surface)', border: '1px solid var(--accent)', borderRadius: 8, padding: '6px 10px', zIndex: 10, whiteSpace: 'nowrap', boxShadow: '0 4px 20px rgba(0,0,0,.5)', pointerEvents: 'none' }}>
-                    <div style={{ fontFamily: 'monospace', fontSize: 10, fontWeight: 700, color: 'var(--accent)', marginBottom: 2 }}>{tooltip.tarefa}</div>
+                  <div style={{
+                    position: 'absolute', top: 4, left: '50%',
+                    transform: 'translateX(-50%)',
+                    background: 'var(--surface)', border: '1px solid var(--accent)',
+                    borderRadius: 8, padding: '6px 10px', zIndex: 10,
+                    whiteSpace: 'nowrap', boxShadow: '0 4px 20px rgba(0,0,0,.5)',
+                    pointerEvents: 'none'
+                  }}>
+                    <div style={{ fontFamily: 'monospace', fontSize: 10, fontWeight: 700, color: tooltip.extrapolou ? 'var(--red)' : 'var(--accent)', marginBottom: 2 }}>
+                      {tooltip.tarefa}{tooltip.extrapolou ? ' ⚠️' : ''}
+                    </div>
                     <div style={{ fontSize: 9, color: 'var(--muted)' }}>⏱️ {formatarTempo(tooltip.tempo)}</div>
-                    <div style={{ fontSize: 9, color: 'var(--muted)' }}>📅 {tooltip.dia}</div>
                   </div>
                 )}
               </div>
 
-              <div style={{ fontSize: 8, color: ehHoje ? 'var(--accent)' : 'var(--muted)', fontWeight: ehHoje ? 700 : 400, textAlign: 'center', marginTop: 3, lineHeight: 1.3 }}>
+              <div style={{ fontSize: 8, color: estouro ? 'var(--red)' : ehHoje ? 'var(--accent)' : 'var(--muted)', fontWeight: ehHoje || estouro ? 700 : 400, textAlign: 'center', marginTop: 3, lineHeight: 1.3 }}>
                 {nomeDia.replace('.', '')}
               </div>
-              {totalDia > 0 && <div style={{ fontSize: 8, fontWeight: 700, color: corOcupacao(pct), marginTop: 1 }}>{pct}%</div>}
+              {totalDia > 0 && (
+                <div style={{ fontSize: 8, fontWeight: 700, color: corOcupacao(pct), marginTop: 1 }}>
+                  {pct}%{estouro ? '🔴' : ''}
+                </div>
+              )}
             </div>
           )
         })}
       </div>
 
+      {/* Legenda */}
       <div style={{ marginTop: 14, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {tarefas.map(t => (
           <div key={t.tarefa} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--surface2)', borderRadius: 6, padding: '3px 7px' }}>
@@ -244,11 +269,9 @@ function GraficoBarrasSemana({ tarefas, tarefaCores }) {
   )
 }
 
-function GraficoMesGeral({ porMaquina }) {
+function GraficoBarrasMes({ tarefas, tarefaCores }) {
   const semanas = semanasDoMes()
-  const ALTURA = 220
-  const hoje = new Date()
-  const nMaquinas = Object.keys(porMaquina).length || 1
+  const ALTURA = 200
 
   const capSemana = semanas.map(s => {
     let dias = 0
@@ -257,82 +280,112 @@ function GraficoMesGeral({ porMaquina }) {
       if (d.getDay() !== 0 && d.getDay() !== 6) dias++
       d.setDate(d.getDate() + 1)
     }
-    return { ...s, cap: dias * CAP_DIA * nMaquinas, dias }
+    return { ...s, cap: dias * CAP_DIA, dias }
   })
 
   const maxCap = Math.max(...capSemana.map(s => s.cap))
   const escala = ALTURA / maxCap
+  const hoje = new Date()
 
-  const dadosSemana = semanas.map((s, idx) => {
+  const tarefasSemana = semanas.map((s, idx) => {
     const nDias = capSemana[idx].dias
-    let totalSemana = 0
-    Object.values(porMaquina).forEach(tarefas => {
-      const diasUteis = proximosDiasUteis(nDias, s.inicio)
-      const dist = distribuirNoDias(tarefas, diasUteis)
-      Object.values(dist).forEach(segs => {
-        segs.forEach(sg => { totalSemana += sg.tempoNoDia })
+    const diasUteis = proximosDiasUteis(nDias, s.inicio)
+    const dist = distribuirNoDias(tarefas, diasUteis)
+    const porTarefa = {}
+    Object.values(dist).forEach(segs => {
+      segs.forEach(sg => {
+        if (!porTarefa[sg.tarefa]) porTarefa[sg.tarefa] = 0
+        porTarefa[sg.tarefa] += sg.tempoNoDia
       })
     })
-    return { ...s, total: totalSemana, cap: capSemana[idx].cap }
+    const total = Object.values(porTarefa).reduce((s, v) => s + v, 0)
+    return { ...s, total, cap: capSemana[idx].cap, porTarefa }
   })
-
-  const totalGeral = Object.values(porMaquina).flat().reduce((s, t) => s + t.tempo, 0)
-  const diasNecessarios = Math.ceil(totalGeral / (CAP_DIA * nMaquinas))
 
   return (
     <div>
-      <div style={{ background: 'var(--surface2)', borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-        <div style={{ textAlign: 'center', flex: 1 }}>
-          <div style={{ fontFamily: 'monospace', fontSize: 20, fontWeight: 700, color: 'var(--yellow)' }}>{nMaquinas}</div>
-          <div style={{ fontSize: 10, color: 'var(--muted)' }}>máquinas</div>
-        </div>
-        <div style={{ textAlign: 'center', flex: 1 }}>
-          <div style={{ fontFamily: 'monospace', fontSize: 20, fontWeight: 700, color: 'var(--accent)' }}>{formatarTempo(totalGeral)}</div>
-          <div style={{ fontSize: 10, color: 'var(--muted)' }}>carga total</div>
-        </div>
-        <div style={{ textAlign: 'center', flex: 1 }}>
-          <div style={{ fontFamily: 'monospace', fontSize: 20, fontWeight: 700, color: 'var(--green)' }}>~{diasNecessarios}</div>
-          <div style={{ fontSize: 10, color: 'var(--muted)' }}>dias necessários</div>
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end' }}>
-        <div style={{ width: 3, flexShrink: 0 }}>
-          <div style={{ height: ALTURA, borderRight: '1px solid var(--border)' }} />
-        </div>
-        {dadosSemana.map((s, idx) => {
+      <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', marginTop: 8 }}>
+        <div style={{ width: 4, flexShrink: 0 }} />
+        {tarefasSemana.map((s, idx) => {
           const pct = s.cap > 0 ? Math.round((s.total / s.cap) * 100) : 0
           const ehAtual = hoje >= s.inicio && hoje <= s.fim
           const estouro = s.total > s.cap
-          const cor = corOcupacao(pct)
-          const barH = Math.min(s.total * escala, ALTURA)
           const label = `S${idx + 1}\n${s.inicio.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`
+          const segmentos = Object.entries(s.porTarefa).sort((a, b) => b[1] - a[1])
+
           return (
             <div key={idx} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <div style={{
                 position: 'relative', height: ALTURA, width: '88%',
                 background: 'var(--surface2)', borderRadius: '4px 4px 0 0',
                 border: estouro ? '1px solid rgba(255,61,90,.5)' : ehAtual ? '1px solid rgba(0,229,255,.4)' : '1px solid var(--border)',
-                overflow: 'hidden'
+                overflow: 'hidden' // limita dentro da barra
               }}>
-                <div style={{ position: 'absolute', bottom: 0, left: 1, right: 1, height: barH, background: cor, borderRadius: '3px 3px 0 0', opacity: 0.8 }} />
-                <div style={{ position: 'absolute', bottom: Math.min(s.cap * escala, ALTURA - 1), left: 0, right: 0, borderTop: '1px dashed rgba(255,255,255,.3)', zIndex: 4 }} />
-                {barH > 30 && <div style={{ position: 'absolute', bottom: barH / 2 - 8, left: 0, right: 0, textAlign: 'center', fontSize: 9, fontWeight: 700, color: '#000' }}>{pct}%</div>}
+                {(() => {
+                  let acum = 0
+                  return segmentos.map(([tarefa, tempo], i) => {
+                    const bottom = acum * escala
+                    const height = Math.max(tempo * escala, 2)
+                    const extrapolou = (acum + tempo) > s.cap
+                    acum += tempo
+                    const cor = extrapolou ? 'var(--red)' : tarefaCores[tarefa] || '#888'
+                    return (
+                      <div key={tarefa} style={{
+                        position: 'absolute', bottom, left: 1, right: 1,
+                        height,
+                        background: cor,
+                        borderRadius: i === segmentos.length - 1 ? '3px 3px 0 0' : 0,
+                        opacity: 0.85,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        overflow: 'hidden'
+                      }}>
+                        {height > 14 && (
+                          <span style={{ fontSize: 7, fontWeight: 700, color: '#000', textAlign: 'center', padding: '0 2px' }}>
+                            {tarefa.length > 7 ? tarefa.slice(0, 6) + '…' : tarefa}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })
+                })()}
+
+                {/* Linha capacidade */}
+                <div style={{
+                  position: 'absolute',
+                  bottom: Math.min(s.cap * escala, ALTURA - 1),
+                  left: 0, right: 0,
+                  borderTop: '1px dashed rgba(255,255,255,.3)',
+                  zIndex: 4
+                }} />
               </div>
-              <div style={{ fontSize: 8, color: estouro ? 'var(--red)' : ehAtual ? 'var(--accent)' : 'var(--muted)', fontWeight: ehAtual || estouro ? 700 : 400, textAlign: 'center', marginTop: 3, lineHeight: 1.4, whiteSpace: 'pre-line' }}>{label}</div>
-              <div style={{ fontSize: 8, fontWeight: 700, color: cor, marginTop: 1 }}>{formatarTempo(s.total)}</div>
+
+              <div style={{ fontSize: 8, color: estouro ? 'var(--red)' : ehAtual ? 'var(--accent)' : 'var(--muted)', fontWeight: ehAtual || estouro ? 700 : 400, textAlign: 'center', marginTop: 3, lineHeight: 1.4, whiteSpace: 'pre-line' }}>
+                {label}
+              </div>
+              <div style={{ fontSize: 8, fontWeight: 700, color: corOcupacao(pct), marginTop: 1 }}>
+                {pct > 0 ? `${pct}%${estouro ? '🔴' : ''}` : '—'}
+              </div>
             </div>
           )
         })}
       </div>
-      <div style={{ marginTop: 10, fontSize: 10, color: 'var(--muted)', textAlign: 'center' }}>
-        Cap. semana: {nMaquinas} máq × {formatarTempo(CAP_DIA)}/dia × dias úteis
+
+      {/* Legenda */}
+      <div style={{ marginTop: 14, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {tarefas.map(t => (
+          <div key={t.tarefa} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--surface2)', borderRadius: 6, padding: '3px 7px' }}>
+            <div style={{ width: 10, height: 10, borderRadius: 2, background: tarefaCores[t.tarefa], flexShrink: 0 }} />
+            <span style={{ fontSize: 9, color: 'var(--text)', fontWeight: 700 }}>{t.tarefa}</span>
+            <span style={{ fontSize: 9, color: 'var(--muted)' }}>{formatarTempo(t.tempo)}</span>
+          </div>
+        ))}
       </div>
     </div>
   )
 }
 
 function ModalMaquina({ maquina, tarefas, onClose }) {
+  const [aba, setAba] = useState('semana')
   const totalMin = tarefas.reduce((s, t) => s + t.tempo, 0)
   const diasNecessarios = Math.ceil(totalMin / CAP_DIA)
   const tarefaCores = {}
@@ -344,16 +397,32 @@ function ModalMaquina({ maquina, tarefas, onClose }) {
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 16, color: 'var(--yellow)' }}>{maquina.toUpperCase()}</div>
-            <div style={{ fontSize: 12, color: 'var(--muted)' }}>{tarefas.length} job(s) · {formatarTempo(totalMin)} total · ~{diasNecessarios} dia(s)</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>{tarefas.length} tarefa(s) · {formatarTempo(totalMin)} total · ~{diasNecessarios} dia(s)</div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}><X size={20} /></button>
         </div>
 
+        <div style={{ display: 'flex', gap: 6, padding: '12px 16px 0', flexShrink: 0 }}>
+          {[
+            { key: 'semana', label: '📅 Próxima semana' },
+            { key: 'mes', label: '🗓️ Mês atual' },
+          ].map(({ key, label }) => (
+            <button key={key} onClick={() => setAba(key)} style={{
+              flex: 1, padding: '8px', border: '1px solid',
+              borderColor: aba === key ? 'var(--accent)' : 'var(--border)',
+              background: aba === key ? 'rgba(0,229,255,.1)' : 'var(--surface2)',
+              color: aba === key ? 'var(--accent)' : 'var(--muted)',
+              borderRadius: 8, fontWeight: 700, fontSize: 11, cursor: 'pointer'
+            }}>{label}</button>
+          ))}
+        </div>
+
         <div style={{ overflowY: 'auto', flex: 1, padding: 16 }}>
-          <GraficoBarrasSemana tarefas={tarefas} tarefaCores={tarefaCores} />
+          {aba === 'semana' && <GraficoBarrasSemana tarefas={tarefas} tarefaCores={tarefaCores} />}
+          {aba === 'mes' && <GraficoBarrasMes tarefas={tarefas} tarefaCores={tarefaCores} />}
 
           <div style={{ marginTop: 20 }}>
-            <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Jobs na fila</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Tarefas na fila</div>
             {tarefas.map((t) => {
               const pctDia = Math.round((t.tempo / CAP_DIA) * 100)
               return (
@@ -361,15 +430,12 @@ function ModalMaquina({ maquina, tarefas, onClose }) {
                   <div style={{ width: 10, height: 10, borderRadius: 2, background: tarefaCores[t.tarefa], flexShrink: 0 }} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700 }}>{t.tarefa}</div>
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                      {t.turno ? `${t.turno}º Turno` : ''}{t.chapas ? ` · ${t.chapas} chapas` : ''}
-                    </div>
                     <div style={{ height: 4, background: 'var(--surface2)', borderRadius: 99, overflow: 'hidden', marginTop: 4 }}>
                       <div style={{ height: '100%', width: `${Math.min(pctDia, 100)}%`, background: tarefaCores[t.tarefa], borderRadius: 99 }} />
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)' }}>{formatarTempo(t.tempo)}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: pctDia > 100 ? 'var(--red)' : 'var(--accent)' }}>{formatarTempo(t.tempo)}</div>
                     <div style={{ fontSize: 10, color: 'var(--muted)' }}>{pctDia}% de 1 dia</div>
                   </div>
                 </div>
@@ -386,14 +452,13 @@ export default function Indicadores({ usuario }) {
   const [planejamentos, setPlanejamentos] = useState([])
   const [apontamentos, setApontamentos] = useState([])
   const [lancamentos, setLancamentos] = useState([])
-  const [porMaquina, setPorMaquina] = useState({})
+  const [nestingPorMaquina, setNestingPorMaquina] = useState({})
   const [loading, setLoading] = useState(true)
   const [agora, setAgora] = useState(new Date())
   const [planta, setPlanta] = useState(usuario?.estab === 'todas' || usuario?.ver_todas_plantas ? '' : usuario?.estab || '')
   const [modal, setModal] = useState(null)
   const [modalData, setModalData] = useState(null)
   const [abaIndicador, setAbaIndicador] = useState('geral')
-  const [abaCarga, setAbaCarga] = useState('maquinas')
   const [maquinaSelecionada, setMaquinaSelecionada] = useState(null)
 
   useEffect(() => {
@@ -416,39 +481,39 @@ export default function Indicadores({ usuario }) {
     if (planta) qLanc = qLanc.eq('estab', planta)
     const { data: lancs } = await qLanc
 
-    // Planejamentos PENDENTES para carga — sem filtro de data
-    let qCarga = supabase.from('laser_planejamento').select('*').eq('finalizado', false)
-    if (planta) qCarga = qCarga.eq('estab', planta)
-    const { data: pendentesAll } = await qCarga
+    const { data: nestingRows } = await supabase
+      .from('nesting')
+      .select('maquina, tarefa, programa, tempo_corte_total')
+
+    const porMaquina = {}
+    const programasVistos = new Set()
+
+    if (nestingRows) {
+      nestingRows.forEach(row => {
+        const maq = (row.maquina || '—').trim()
+        const tar = (row.tarefa || '—').trim()
+        const prog = (row.programa || '').trim()
+        const chave = `${maq}|${tar}|${prog}`
+
+        if (programasVistos.has(chave)) return
+        programasVistos.add(chave)
+
+        if (!porMaquina[maq]) porMaquina[maq] = {}
+        if (!porMaquina[maq][tar]) porMaquina[maq][tar] = 0
+        const tempoH = parseFloat(String(row.tempo_corte_total || 0).replace(',', '.')) || 0
+        porMaquina[maq][tar] += tempoH * 60
+      })
+    }
 
     const resultado = {}
-    ;(pendentesAll || []).forEach(p => {
-      const maq = (p.maquina || '—').trim()
-      if (!resultado[maq]) resultado[maq] = []
-
-      let tempoTotal = 0
-      if (p.cncs && p.cncs.length > 0) {
-        tempoTotal = p.cncs.reduce((s, c) => s + (c.tempoTotal || 0), 0)
-      } else if (p.tempo_chapa) {
-        tempoTotal = (p.chapas_cortar || p.total_chapas || 0) * p.tempo_chapa
-      }
-
-      if (tempoTotal > 0) {
-        resultado[maq].push({
-          tarefa: p.job,
-          tempo: Math.round(tempoTotal),
-          turno: p.turno,
-          chapas: p.chapas_cortar || p.total_chapas || 0,
-          id: p.id
-        })
-      }
+    Object.entries(porMaquina).forEach(([maq, tarefas]) => {
+      resultado[maq] = Object.entries(tarefas)
+        .map(([tarefa, tempo]) => ({ tarefa, tempo: Math.round(tempo) }))
+        .filter(t => t.tempo > 0)
+        .sort((a, b) => b.tempo - a.tempo)
     })
 
-    Object.keys(resultado).forEach(maq => {
-      resultado[maq].sort((a, b) => (a.turno || '9').localeCompare(b.turno || '9'))
-    })
-
-    setPorMaquina(resultado)
+    setNestingPorMaquina(resultado)
     setPlanejamentos(plans || [])
     setApontamentos(aponts || [])
     setLancamentos(lancs || [])
@@ -610,132 +675,100 @@ export default function Indicadores({ usuario }) {
 
       {abaIndicador === 'carga' && (
         <>
-          <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
-            {[
-              { key: 'maquinas', label: '🖨️ Por máquina' },
-              { key: 'mes', label: '🗓️ Mês geral' },
-            ].map(({ key, label }) => (
-              <button key={key} onClick={() => setAbaCarga(key)} style={{
-                flex: 1, padding: '9px 6px', border: '1px solid',
-                borderColor: abaCarga === key ? 'var(--yellow)' : 'var(--border)',
-                background: abaCarga === key ? 'rgba(255,214,10,.1)' : 'var(--surface2)',
-                color: abaCarga === key ? 'var(--yellow)' : 'var(--muted)',
-                borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer'
-              }}>{label}</button>
-            ))}
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 16 }}>
+            Baseado no nesting · toque em uma máquina para ver a carga detalhada
           </div>
 
-          {abaCarga === 'mes' && (
-            Object.keys(porMaquina).length === 0 ? (
-              <div className="empty">
-                <div className="emoji">🗓️</div>
-                <h3>Sem jobs pendentes</h3>
-                <p>Lance um planejamento na aba Laser</p>
-              </div>
-            ) : (
-              <div className="card">
-                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>🗓️ Visão do mês</div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 16 }}>Todas as máquinas somadas — carga total por semana</div>
-                <GraficoMesGeral porMaquina={porMaquina} />
-              </div>
-            )
-          )}
+          {Object.keys(nestingPorMaquina).length === 0 ? (
+            <div className="empty">
+              <div className="emoji">🖨️</div>
+              <h3>Sem dados de nesting</h3>
+              <p>Importe o arquivo de nesting pelo monitor</p>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {Object.entries(nestingPorMaquina)
+                .sort((a, b) => b[1].reduce((s, t) => s + t.tempo, 0) - a[1].reduce((s, t) => s + t.tempo, 0))
+                .map(([maquina, tarefas]) => {
+                  const totalMin = tarefas.reduce((s, t) => s + t.tempo, 0)
+                  const diasNec = Math.ceil(totalMin / CAP_DIA)
+                  const pctSemana = Math.min(Math.round((totalMin / (CAP_DIA * 5)) * 100), 999)
+                  const cor = corOcupacao(pctSemana)
+                  const tarefaCores = {}
+                  tarefas.forEach((t, i) => { tarefaCores[t.tarefa] = CORES[i % CORES.length] })
 
-          {abaCarga === 'maquinas' && (
-            Object.keys(porMaquina).length === 0 ? (
-              <div className="empty">
-                <div className="emoji">🖨️</div>
-                <h3>Sem jobs pendentes</h3>
-                <p>Lance um planejamento na aba Laser para ver a carga</p>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {Object.entries(porMaquina)
-                  .sort((a, b) => b[1].reduce((s, t) => s + t.tempo, 0) - a[1].reduce((s, t) => s + t.tempo, 0))
-                  .map(([maquina, tarefas]) => {
-                    const totalMin = tarefas.reduce((s, t) => s + t.tempo, 0)
-                    const diasNec = Math.ceil(totalMin / CAP_DIA)
-                    const pctSemana = Math.min(Math.round((totalMin / (CAP_DIA * 5)) * 100), 999)
-                    const cor = corOcupacao(pctSemana)
-                    const tarefaCores = {}
-                    tarefas.forEach((t, i) => { tarefaCores[t.tarefa] = CORES[i % CORES.length] })
+                  const dias5 = proximosDiasUteis(5)
+                  const dist5 = distribuirNoDias(tarefas, dias5)
+                  const HMIN = 60
+                  const escMin = HMIN / CAP_DIA
 
-                    const dias5 = proximosDiasUteis(5)
-                    const dist5 = distribuirNoDias(tarefas, dias5)
-                    const HMIN = 56
-                    const escMin = HMIN / CAP_DIA
+                  return (
+                    <div key={maquina} onClick={() => setMaquinaSelecionada({ maquina, tarefas })}
+                      className="card" style={{ marginBottom: 0, cursor: 'pointer', padding: '14px' }}>
 
-                    return (
-                      <div key={maquina} onClick={() => setMaquinaSelecionada({ maquina, tarefas })}
-                        className="card" style={{ marginBottom: 0, cursor: 'pointer', padding: '14px' }}>
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: cor, flexShrink: 0 }} />
-                          <div style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, color: 'var(--yellow)', flex: 1 }}>
-                            {maquina.toUpperCase()}
-                          </div>
-                          <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontFamily: 'monospace', fontSize: 18, fontWeight: 700, color: cor }}>{pctSemana}%</div>
-                            <div style={{ fontSize: 9, color: 'var(--muted)' }}>semana</div>
-                          </div>
-                        </div>
-
-                        <div style={{ display: 'flex', gap: 3, height: HMIN, marginBottom: 8 }}>
-                          {dias5.map(dia => {
-                            const key = dia.toISOString().split('T')[0]
-                            const segs = dist5[key] || []
-                            const totalDia = segs.reduce((s, sg) => s + sg.tempoNoDia, 0)
-                            const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
-                            const ehHoje = dia.getTime() === hoje.getTime()
-                            const nomeDia = dia.toLocaleDateString('pt-BR', { weekday: 'short' })
-                            let acum = 0
-
-                            return (
-                              <div key={key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                                <div style={{
-                                  flex: 1, width: '100%', position: 'relative',
-                                  background: 'var(--surface2)', borderRadius: '3px 3px 0 0',
-                                  border: ehHoje ? '1px solid rgba(0,229,255,.3)' : '1px solid var(--border)',
-                                  overflow: 'hidden'
-                                }}>
-                                  {segs.map((sg, i) => {
-                                    const bottom = acum * escMin
-                                    const height = Math.max(sg.tempoNoDia * escMin, 2)
-                                    acum += sg.tempoNoDia
-                                    return (
-                                      <div key={i} style={{
-                                        position: 'absolute', bottom, left: 0, right: 0, height,
-                                        background: tarefaCores[sg.tarefa] || '#888',
-                                        opacity: 0.9
-                                      }} />
-                                    )
-                                  })}
-                                </div>
-                                <div style={{ fontSize: 8, color: ehHoje ? 'var(--accent)' : 'var(--muted)', fontWeight: ehHoje ? 700 : 400 }}>
-                                  {nomeDia.replace('.', '').slice(0, 3)}
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{ flex: 1, height: 5, background: 'var(--surface2)', borderRadius: 99, overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: `${Math.min(pctSemana, 100)}%`, background: cor, borderRadius: 99 }} />
-                          </div>
-                          <div style={{ fontSize: 10, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
-                            {formatarTempo(totalMin)} · ~{diasNec}d · {tarefas.length} job(s)
-                          </div>
-                        </div>
-
-                        <div style={{ fontSize: 9, color: '#7c3aed', textAlign: 'right', marginTop: 6, fontWeight: 700 }}>
-                          ver semana detalhada ›
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: cor, flexShrink: 0 }} />
+                        <div style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: 'var(--yellow)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {maquina.toUpperCase()}
                         </div>
                       </div>
-                    )
-                  })}
-              </div>
-            )
+
+                      {/* Mini gráfico colorido 5 dias */}
+                      <div style={{ display: 'flex', gap: 2, height: HMIN, alignItems: 'flex-end', marginBottom: 10 }}>
+                        {dias5.map(dia => {
+                          const key = dia.toISOString().split('T')[0]
+                          const segs = dist5[key] || []
+                          const totalDia = segs.reduce((s, sg) => s + sg.tempoNoDia, 0)
+                          const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
+                          const ehHoje = dia.getTime() === hoje.getTime()
+                          const estouro = totalDia > CAP_DIA
+                          let acum = 0
+
+                          return (
+                            <div key={key} style={{
+                              flex: 1, position: 'relative', height: HMIN,
+                              background: 'var(--surface2)', borderRadius: '2px 2px 0 0',
+                              border: estouro ? '1px solid rgba(255,61,90,.5)' : ehHoje ? '1px solid rgba(0,229,255,.3)' : '1px solid var(--border)',
+                              overflow: 'hidden'
+                            }}>
+                              {segs.map((sg, i) => {
+                                const bottom = acum * escMin
+                                const height = Math.max(sg.tempoNoDia * escMin, 2)
+                                const extrapolou = (acum + sg.tempoNoDia) > CAP_DIA
+                                acum += sg.tempoNoDia
+                                return (
+                                  <div key={i} style={{
+                                    position: 'absolute', bottom, left: 0, right: 0,
+                                    height,
+                                    background: extrapolou ? 'var(--red)' : tarefaCores[sg.tarefa] || '#888',
+                                    opacity: 0.9
+                                  }} />
+                                )
+                              })}
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      <div style={{ textAlign: 'center', marginBottom: 6 }}>
+                        <div style={{ fontFamily: 'monospace', fontSize: 22, fontWeight: 700, color: cor }}>{pctSemana}%</div>
+                        <div style={{ fontSize: 9, color: 'var(--muted)' }}>ocupação semana</div>
+                      </div>
+
+                      <div style={{ height: 5, background: 'var(--surface2)', borderRadius: 99, overflow: 'hidden', marginBottom: 8 }}>
+                        <div style={{ height: '100%', width: `${Math.min(pctSemana, 100)}%`, background: cor, borderRadius: 99 }} />
+                      </div>
+
+                      <div style={{ fontSize: 9, color: 'var(--muted)', textAlign: 'center' }}>
+                        {formatarTempo(totalMin)} · ~{diasNec} dia(s) · {tarefas.length} tarefa(s)
+                      </div>
+                      <div style={{ fontSize: 9, color: '#7c3aed', textAlign: 'center', marginTop: 4, fontWeight: 700 }}>
+                        ver detalhes ›
+                      </div>
+                    </div>
+                  )
+                })}
+            </div>
           )}
         </>
       )}
