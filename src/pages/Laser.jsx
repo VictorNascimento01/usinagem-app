@@ -322,8 +322,27 @@ function PlanejarCorte({ planta, usuario }) {
   }
 
   function adicionarCNC() { setCncs(prev => [...prev, { codigo: '', chapas: '', tempoH: '', tempoM: '' }]) }
-  function removerCNC(idx) { setCncs(prev => prev.filter((_, i) => i !== idx)) }
-  function atualizarCNC(idx, campo, valor) { setCncs(prev => prev.map((c, i) => i === idx ? { ...c, [campo]: valor } : c)) }
+
+  function removerCNC(idx) {
+    setCncs(prev => {
+      const novosCncs = prev.filter((_, i) => i !== idx)
+      const totalNovo = novosCncs.reduce((s, c) => s + (parseInt(c.chapas) || 0), 0)
+      if (totalNovo > 0) setTotalChapas(String(totalNovo))
+      return novosCncs
+    })
+  }
+
+  function atualizarCNC(idx, campo, valor) {
+    setCncs(prev => {
+      const novos = prev.map((c, i) => i === idx ? { ...c, [campo]: valor } : c)
+      // Atualiza total de chapas quando muda o campo chapas
+      if (campo === 'chapas') {
+        const totalNovo = novos.reduce((s, c) => s + (parseInt(c.chapas) || 0), 0)
+        if (totalNovo > 0) setTotalChapas(String(totalNovo))
+      }
+      return novos
+    })
+  }
 
   function tempoTotalCNC(cnc) {
     const chapas = parseInt(cnc.chapas) || 1
@@ -334,7 +353,6 @@ function PlanejarCorte({ planta, usuario }) {
   const tempoTotalJob = cncs.reduce((s, c) => s + tempoTotalCNC(c), 0)
   const totalChapasCNCs = cncs.reduce((s, c) => s + (parseInt(c.chapas) || 0), 0)
 
-  // Filtra ordens com base nos CNCs ativos
   const ordensFiltradasPorCNC = (() => {
     if (cncs.length === 0 || Object.keys(itensPorCNCNesting).length === 0) return ordens
     const ordensPermitidas = new Set()
@@ -472,7 +490,7 @@ function PlanejarCorte({ planta, usuario }) {
         <div className="card">
           <div className="card-title">Ordens do job {job}</div>
           <div className="field">
-            <label>Total de chapas do job</label>
+            <label>Total de chapas</label>
             <input className="input" type="number" value={totalChapas} onChange={e => setTotalChapas(e.target.value)} placeholder="Ex: 10" min="1" />
           </div>
           <div className="field">
@@ -507,7 +525,7 @@ function PlanejarCorte({ planta, usuario }) {
             </div>
             {nestingEncontrado && (
               <div style={{ background: 'rgba(0,255,136,.08)', border: '1px solid rgba(0,255,136,.3)', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 12, color: 'var(--green)' }}>
-                🎉 CNCs importados automaticamente do nesting! Remova os que não vai fazer.
+                🎉 CNCs importados! Remova os que não vai fazer — chapas e ordens atualizam automaticamente.
               </div>
             )}
             {cncs.length === 0 && (
@@ -580,7 +598,6 @@ function PlanejarCorte({ planta, usuario }) {
             )}
           </div>
 
-          {/* Ordens filtradas pelos CNCs selecionados */}
           {ordensFiltradasPorCNC.length > 0 && (
             <>
               <div style={{ height: 1, background: 'var(--border)', margin: '8px 0 12px' }} />
