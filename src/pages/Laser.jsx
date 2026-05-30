@@ -16,6 +16,16 @@ const PLANTAS = [
   { key: '200', label: '📍 Palmeira' },
 ]
 
+const MAQUINAS_PALMEIRA = [
+  'ML39', 'ML38', 'ML34', 'ML30', 'ML29', 'ML19', 'ML43', '400', '260'
+]
+
+const MAQUINAS_POR_PLANTA = {
+  '200': MAQUINAS_PALMEIRA,
+  '100': [],
+  'todas': MAQUINAS_PALMEIRA,
+}
+
 function nomeTurno(t) {
   if (t === '1') return '1º Turno'
   if (t === '2') return '2º Turno'
@@ -305,26 +315,10 @@ function PlanejarCorte({ planta, usuario }) {
   const [loading, setLoading] = useState(false)
   const [salvando, setSalvando] = useState(false)
   const [toast, setToast] = useState(null)
-  const [maquinasSalvas, setMaquinasSalvas] = useState([])
-  const [showMaquinas, setShowMaquinas] = useState(false)
-
-  useEffect(() => {
-    const salvas = JSON.parse(localStorage.getItem('maquinas_laser') || '[]')
-    setMaquinasSalvas(salvas)
-  }, [])
 
   function showToast(msg, cor = 'var(--green)') {
     setToast({ msg, cor })
     setTimeout(() => setToast(null), 3000)
-  }
-
-  function salvarMaquina(nome) {
-    const salvas = JSON.parse(localStorage.getItem('maquinas_laser') || '[]')
-    if (!salvas.includes(nome)) {
-      salvas.push(nome)
-      localStorage.setItem('maquinas_laser', JSON.stringify(salvas))
-      setMaquinasSalvas(salvas)
-    }
   }
 
   function adicionarCNC() { setCncs(prev => [...prev, { codigo: '', chapas: '', tempoH: '', tempoM: '' }]) }
@@ -339,6 +333,18 @@ function PlanejarCorte({ planta, usuario }) {
 
   const tempoTotalJob = cncs.reduce((s, c) => s + tempoTotalCNC(c), 0)
   const totalChapasCNCs = cncs.reduce((s, c) => s + (parseInt(c.chapas) || 0), 0)
+
+  // Filtra ordens com base nos CNCs ativos
+  const ordensFiltradasPorCNC = (() => {
+    if (cncs.length === 0 || Object.keys(itensPorCNCNesting).length === 0) return ordens
+    const ordensPermitidas = new Set()
+    cncs.forEach(cnc => {
+      const itens = itensPorCNCNesting[cnc.codigo] || []
+      itens.forEach(it => ordensPermitidas.add(String(it.ordem)))
+    })
+    if (ordensPermitidas.size === 0) return ordens
+    return ordens.filter(o => ordensPermitidas.has(String(o.ordem)))
+  })()
 
   async function buscarOrdens() {
     if (!maquina || !job) { showToast('Informe a máquina e o job!', 'var(--red)'); return }
@@ -389,7 +395,6 @@ function PlanejarCorte({ planta, usuario }) {
     }
 
     setOrdens(data || [])
-    salvarMaquina(maquina)
     setLoading(false)
     if (!data?.length) showToast('Nenhuma ordem encontrada!', 'var(--red)')
   }
@@ -397,9 +402,9 @@ function PlanejarCorte({ planta, usuario }) {
   async function confirmar() {
     if (!totalChapas) { showToast('Informe o total de chapas!', 'var(--red)'); return }
     if (tipoCort === 'parcial' && !chapasParcial) { showToast('Informe quantas chapas vai cortar!', 'var(--red)'); return }
-    if (ordens.length === 0) { showToast('Busque as ordens primeiro!', 'var(--red)'); return }
+    if (ordensFiltradasPorCNC.length === 0) { showToast('Busque as ordens primeiro!', 'var(--red)'); return }
     setSalvando(true)
-    const estab = ordens[0]?.estab || ''
+    const estab = ordensFiltradasPorCNC[0]?.estab || ordens[0]?.estab || ''
     const chapasCortar = tipoCort === 'parcial' ? parseInt(chapasParcial) : parseInt(totalChapas)
     const cncsFormatados = cncs.map((c, i) => ({
       numero: i + 1, codigo: c.codigo, chapas: parseInt(c.chapas) || 1,
@@ -419,30 +424,24 @@ function PlanejarCorte({ planta, usuario }) {
       showToast('✅ Planejamento salvo!')
       setJob(''); setTotalChapas(''); setChapasParcial(''); setTipoCort('total')
       setOrdens([]); setCncs([]); setNestingEncontrado(false); setItensPorCNCNesting({})
-      setCncExpandido(null); setTurno(detectarTurno())
+      setCncExpandido(null); setTurno(detectarTurno()); setMaquina('')
     }
   }
 
-  const maquinasFiltradas = maquinasSalvas.filter(m => m.toLowerCase().includes(maquina.toLowerCase()))
+  const maquinasDisponiveis = MAQUINAS_POR_PLANTA[planta] || MAQUINAS_PALMEIRA
 
   return (
     <>
       <div className="card">
         <div className="card-title">📋 Planejar corte</div>
-        <div className="field" style={{ position: 'relative' }}>
+        <div className="field">
           <label>Máquina</label>
-          <input className="input" value={maquina}
-            onChange={e => { setMaquina(e.target.value); setShowMaquinas(true) }}
-            onFocus={() => setShowMaquinas(true)}
-            onBlur={() => setTimeout(() => setShowMaquinas(false), 200)}
-            placeholder="Ex: ML42, ML35..." autoComplete="off" />
-          {showMaquinas && maquinasFiltradas.length > 0 && (
-            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--surface2)', border: '1px solid var(--accent)', borderTop: 'none', borderRadius: '0 0 10px 10px', zIndex: 100 }}>
-              {maquinasFiltradas.map((m, i) => (
-                <div key={i} onClick={() => { setMaquina(m); setShowMaquinas(false) }} style={{ padding: '10px 14px', cursor: 'pointer', fontFamily: 'monospace', fontSize: 13, borderBottom: '1px solid var(--border)' }}>{m}</div>
-              ))}
-            </div>
-          )}
+          <select className="input" value={maquina} onChange={e => setMaquina(e.target.value)}>
+            <option value="">Selecione a máquina...</option>
+            {maquinasDisponiveis.map(m => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
         </div>
         <div className="field">
           <label>Job / Tarefa</label>
@@ -508,7 +507,7 @@ function PlanejarCorte({ planta, usuario }) {
             </div>
             {nestingEncontrado && (
               <div style={{ background: 'rgba(0,255,136,.08)', border: '1px solid rgba(0,255,136,.3)', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 12, color: 'var(--green)' }}>
-                🎉 CNCs importados automaticamente do nesting!
+                🎉 CNCs importados automaticamente do nesting! Remova os que não vai fazer.
               </div>
             )}
             {cncs.length === 0 && (
@@ -580,19 +579,29 @@ function PlanejarCorte({ planta, usuario }) {
               </div>
             )}
           </div>
-          <div style={{ height: 1, background: 'var(--border)', margin: '8px 0 16px' }} />
-          {ordens.map((o, i) => (
-            <div key={i} style={{ padding: '10px 0', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700 }}>{o.item_ccs}</div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>OP {o.ordem} · {o.cliente || '—'} · {o.qtde_ordem} pç</div>
+
+          {/* Ordens filtradas pelos CNCs selecionados */}
+          {ordensFiltradasPorCNC.length > 0 && (
+            <>
+              <div style={{ height: 1, background: 'var(--border)', margin: '8px 0 12px' }} />
+              <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
+                Ordens dos CNCs selecionados ({ordensFiltradasPorCNC.length})
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <span style={{ background: o.estab === '100' ? 'rgba(0,229,255,.15)' : 'rgba(0,255,136,.15)', color: o.estab === '100' ? 'var(--accent)' : 'var(--green)', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4 }}>{o.estab === '100' ? 'Limeira' : 'Palmeira'}</span>
-                <div style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--yellow)', fontWeight: 700, marginTop: 4 }}>{o.saldo} pç</div>
-              </div>
-            </div>
-          ))}
+              {ordensFiltradasPorCNC.map((o, i) => (
+                <div key={i} style={{ padding: '10px 0', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700 }}>{o.item_ccs}</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>OP {o.ordem} · {o.cliente || '—'} · {o.qtde_ordem} pç</div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ background: o.estab === '100' ? 'rgba(0,229,255,.15)' : 'rgba(0,255,136,.15)', color: o.estab === '100' ? 'var(--accent)' : 'var(--green)', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4 }}>{o.estab === '100' ? 'Limeira' : 'Palmeira'}</span>
+                    <div style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--yellow)', fontWeight: 700, marginTop: 4 }}>{o.saldo} pç</div>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+
           <button className="btn-primary" onClick={confirmar} disabled={salvando} style={{ background: 'var(--yellow)', color: '#000', marginTop: 16 }}>
             {salvando ? 'Salvando...' : '✅ Confirmar planejamento'}
           </button>
@@ -817,6 +826,7 @@ function Sequencia({ planta, usuario }) {
   const [reportando, setReportando] = useState(null)
   const [agora, setAgora] = useState(new Date())
   const alertasEnviados = useState(new Set())[0]
+  const [cncAtivoMap, setCncAtivoMap] = useState({})
 
   useEffect(() => { carregarSequencia() }, [planta])
   useEffect(() => {
@@ -833,6 +843,9 @@ function Sequencia({ planta, usuario }) {
     if (planta && planta !== 'todas') q = q.eq('estab', planta)
     const { data } = await q
     setDados(data || [])
+    const map = {}
+    ;(data || []).forEach(d => { map[d.id] = d.cnc_ativo || 0 })
+    setCncAtivoMap(map)
     setLoading(false)
   }
 
@@ -873,6 +886,11 @@ function Sequencia({ planta, usuario }) {
     setDados(prev => prev.map(d => d.id === job.id ? { ...d, ...update } : d).filter(d => !d.finalizado))
   }
 
+  async function selecionarCNC(job, idx) {
+    setCncAtivoMap(prev => ({ ...prev, [job.id]: idx }))
+    await supabase.from('laser_planejamento').update({ cnc_ativo: idx }).eq('id', job.id)
+  }
+
   function estaPausado(job) {
     const pausas = job.pausas || []
     return pausas.length > 0 && !pausas[pausas.length - 1].fim
@@ -886,20 +904,43 @@ function Sequencia({ planta, usuario }) {
     }, 0)
   }
 
-  function formatarCronometro(job) {
-    if (!job.iniciado_em) return null
+  function calcularDecorridoSeg(job) {
+    if (!job.iniciado_em) return 0
     const inicio = new Date(job.iniciado_em)
     const pausado = estaPausado(job)
     const pausas = job.pausas || []
     const ultimaPausa = pausas[pausas.length - 1]
     const referencia = pausado && ultimaPausa ? new Date(ultimaPausa.inicio) : agora
     const totalPausadoSeg = tempoTotalPausado(job) * 60
-    const diff = Math.max(0, Math.floor((referencia - inicio) / 1000) - totalPausadoSeg)
+    return Math.max(0, Math.floor((referencia - inicio) / 1000) - totalPausadoSeg)
+  }
+
+  function formatarCronometro(job) {
+    if (!job.iniciado_em) return null
+    const diff = calcularDecorridoSeg(job)
     const h = Math.floor(diff / 3600)
     const m = Math.floor((diff % 3600) / 60)
     const s = diff % 60
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
   }
+
+  useEffect(() => {
+    dados.forEach(job => {
+      if (!job.iniciado_em || estaPausado(job)) return
+      const cncs = job.cncs || []
+      const cncIdx = cncAtivoMap[job.id] ?? 0
+      const cnc = cncs[cncIdx]
+      if (!cnc || !cnc.tempoPorChapa || cnc.tempoPorChapa <= 0) return
+      const decorridoSeg = calcularDecorridoSeg(job)
+      const chapasFeitas = job.chapas_feitas || 0
+      const chapasTotal = job.chapas_cortar || job.total_chapas || 0
+      const tempoPorChapaSeg = cnc.tempoPorChapa * 60
+      const chapasPrevistas = Math.floor(decorridoSeg / tempoPorChapaSeg)
+      if (chapasPrevistas > chapasFeitas && chapasFeitas < chapasTotal) {
+        marcarChapa(job)
+      }
+    })
+  }, [agora])
 
   function calcularPerformance(job) {
     if (!job.iniciado_em || !job.tempo_chapa) return null
@@ -991,7 +1032,11 @@ function Sequencia({ planta, usuario }) {
           {jobs.map((job, idx) => {
             const chapasFeitas = job.chapas_feitas || 0
             const chapasTotal = job.chapas_cortar || job.total_chapas || 0
-            const tempoRestante = job.tempo_chapa ? (chapasTotal - chapasFeitas) * job.tempo_chapa : null
+            const cncs = job.cncs || []
+            const cncIdx = cncAtivoMap[job.id] ?? 0
+            const cncAtivo = cncs[cncIdx]
+            const tempoPorChapa = cncAtivo?.tempoPorChapa || job.tempo_chapa || null
+            const tempoRestante = tempoPorChapa ? (chapasTotal - chapasFeitas) * tempoPorChapa : null
             const previsao = tempoRestante && !estaPausado(job) ? previsaoTermino(tempoRestante) : null
             const cronometro = formatarCronometro(job)
             const perf = calcularPerformance(job)
@@ -1020,11 +1065,39 @@ function Sequencia({ planta, usuario }) {
                       {job.estab && <span style={{ background: job.estab === '100' ? 'rgba(0,229,255,.15)' : 'rgba(0,255,136,.15)', color: job.estab === '100' ? 'var(--accent)' : 'var(--green)', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4 }}>{job.estab === '100' ? 'Limeira' : 'Palmeira'}</span>}
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>👤 {job.usuario_nome} · {formatarHora(job.criado_em)}</div>
+
+                    {cncs.length > 0 && (
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>CNC cortando agora</div>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {cncs.map((cnc, ci) => (
+                            <button key={ci} onClick={() => selecionarCNC(job, ci)} style={{
+                              padding: '5px 10px', border: '1px solid',
+                              borderColor: cncIdx === ci ? 'var(--accent)' : 'var(--border)',
+                              background: cncIdx === ci ? 'rgba(0,229,255,.15)' : 'var(--surface2)',
+                              color: cncIdx === ci ? 'var(--accent)' : 'var(--muted)',
+                              borderRadius: 8, fontWeight: 700, fontSize: 11, cursor: 'pointer',
+                              display: 'flex', alignItems: 'center', gap: 4
+                            }}>
+                              {cncIdx === ci && <span style={{ fontSize: 8 }}>▶</span>}
+                              CNC {cnc.numero}{cnc.codigo ? ` (${cnc.codigo})` : ''}
+                              {cnc.tempoPorChapa > 0 && <span style={{ fontSize: 9, color: 'var(--muted)', marginLeft: 2 }}>{formatarTempo(cnc.tempoPorChapa)}/ch</span>}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {iniciado && cronometro && (
                       <div style={{ background: pausado ? 'rgba(255,214,10,.08)' : 'rgba(0,229,255,.08)', border: `1px solid ${pausado ? 'rgba(255,214,10,.2)' : 'rgba(0,229,255,.2)'}`, borderRadius: 8, padding: '8px 12px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 2 }}>{pausado ? '⏸️ Pausado' : '⏱️ Em corte'}</div>
                           <div style={{ fontFamily: 'monospace', fontSize: 20, fontWeight: 700, color: pausado ? 'var(--yellow)' : 'var(--accent)', letterSpacing: 2 }}>{cronometro}</div>
+                          {cncAtivo?.tempoPorChapa > 0 && !pausado && (
+                            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
+                              ⏱️ {formatarTempo(cncAtivo.tempoPorChapa)}/chapa · próxima em {formatarTempo(Math.max(0, cncAtivo.tempoPorChapa - (Math.floor(calcularDecorridoSeg(job) / 60) % cncAtivo.tempoPorChapa)))}
+                            </div>
+                          )}
                           {(job.pausas || []).filter(p => p.fim).length > 0 && (
                             <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>⏸️ {(job.pausas || []).filter(p => p.fim).length} pausa(s) · {formatarTempo(tempoTotalPausado(job))} pausado</div>
                           )}
@@ -1289,7 +1362,13 @@ function Planejamentos({ planta, usuario }) {
               </div>
               <button onClick={() => setEditando(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}><X size={20} /></button>
             </div>
-            <div className="field"><label>Máquina</label><input className="input" value={editando.maquina || ''} onChange={e => setEditando(p => ({ ...p, maquina: e.target.value }))} /></div>
+            <div className="field">
+              <label>Máquina</label>
+              <select className="input" value={editando.maquina || ''} onChange={e => setEditando(p => ({ ...p, maquina: e.target.value }))}>
+                <option value="">Selecione...</option>
+                {MAQUINAS_PALMEIRA.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
             <div className="field">
               <label>Turno</label>
               <select className="input" value={editando.turno || '1'} onChange={e => setEditando(p => ({ ...p, turno: e.target.value }))}>
